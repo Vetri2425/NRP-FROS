@@ -1,0 +1,39 @@
+{
+  "name": "copy-of-flash_rover_plan",
+  "version": "0.0.0",
+  "private": true,
+  "description": "<div align=\"center\"> <img width=\"1200\" height=\"475\" alt=\"GHBanner\" src=\"https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6\" /> </div>",
+  "homepage": "https://github.com/Vetri2425/Flash_Rover_Plan#readme",
+  "bugs": {
+    "url": "https://github.com/Vetri2425/Flash_Rover_Plan/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vetri2425/Flash_Rover_Plan.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:backend\"",
+    "dev:frontend": "vite",
+    "dev:backend": "python3 Backend/server.py",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@google/genai": "^1.21.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.1.13",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.2.1",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

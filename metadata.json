@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Flash_Rover_Plan",
+  "description": "A dashboard for monitoring and controlling a land rover mission, including a map view, mission controls, system status, and logs.",
+  "requestFramePermissions": []
+}
