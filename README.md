@@ -1,50 +1,101 @@
+# NRP ROS V2 - Frontend Only
+
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+A React + Vite frontend application for rover mission planning and control.
 
-This contains everything you need to run your app locally.
+## Prerequisites
 
-View your app in AI Studio: https://ai.studio/apps/drive/1VDDKRXkmFj6FGzegMAZaaGr5zkdZUD6c
+- Node.js (v16 or higher)
+- npm or yarn
 
-## Run Locally
+## Installation
 
-**Prerequisites:**  Node.js, Python 3.10+, access to a MAVLink-enabled rover (update the connection string in `backend-python/server.py` as needed)
+1. Clone the repository:
+```bash
+git clone https://github.com/Vetri2425/NRP_ROS_V2.git
+cd NRP_ROS_V2
+```
 
-### 1. Install frontend dependencies
-
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-### 2. Configure environment variables
+3. (Optional) Configure environment variables:
+   - Copy `.env` to `.env.local` if you need custom configuration
+   - Set `GEMINI_API_KEY` if using AI features
+   - Set `VITE_JETSON_BACKEND_URL` to point to your backend server
 
-- Set the `GEMINI_API_KEY` in `.env.local` to your Gemini API key (if required by the UI).
-- Ensure `.env` points `VITE_JETSON_BACKEND_URL` to your Python backend (default `http://localhost:5000`).
+## Running the Application
 
-### 3. Start the real rover backend (Python)
-
-```bash
-cd backend-python
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python server.py
-```
-
-The backend connects to the rover via MAVLink and streams genuine telemetry to the UI.
-
-### 4. Run the frontend
+Start the development server:
 
 ```bash
 npm run dev
 ```
 
-Open the provided Vite dev server URL in your browser to use the planner.
+The application will be available at `http://localhost:3000`
 
-## Deploy
+## Building for Production
 
-Deploy the frontend as you would a standard Vite React app. Host the Python backend separately close to your rover control network, keeping the Socket.IO endpoint accessible to the UI.
-# NRP_ROS
-# NRP_ROS
+Create a production build:
+
+```bash
+npm run build
+```
+
+Preview the production build:
+
+```bash
+npm run preview
+```
+
+## Project Structure
+
+```
+NRP_ROS_V2/
+ src/                    # Source files
+    components/         # React components
+    context/           # React context providers
+    hooks/             # Custom React hooks
+    tools/             # Mission planning tools
+    types/             # TypeScript type definitions
+    utils/             # Utility functions
+    App.tsx            # Main app component
+    config.ts          # Configuration
+    index.tsx          # Entry point
+ index.html             # HTML template
+ package.json           # Dependencies and scripts
+ vite.config.ts         # Vite configuration
+ tsconfig.json          # TypeScript configuration
+ tailwind.config.js     # Tailwind CSS configuration
+ postcss.config.js      # PostCSS configuration
+```
+
+## Features
+
+- Mission planning interface
+- Real-time telemetry display
+- Waypoint management
+- Servo control
+- RTK GPS integration
+- Mission logging and export
+
+## Technologies
+
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS
+- Socket.IO Client
+
+## License
+
+ISC
+
+## Repository
+
+https://github.com/Vetri2425/NRP_ROS_V2
