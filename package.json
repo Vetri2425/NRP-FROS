@@ -16,9 +16,8 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:backend\"",
+    "dev": "npm run dev:frontend",
     "dev:frontend": "vite",
-    "dev:backend": "python3 Backend/server.py",
     "build": "vite build",
     "preview": "vite preview"
   },

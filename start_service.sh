@@ -171,8 +171,8 @@ start_backend || exit 1
 log "Active ROS nodes:"
 ros2 node list || true
 
-cd "$PROJECT_ROOT"
-log "Starting NRP frontend..."
-npm run dev:frontend &
-NPM_PID=$!
-wait "$NPM_PID"
+# cd "$PROJECT_ROOT"
+# log "Starting NRP frontend..."
+# npm run dev:frontend &
+# NPM_PID=$!
+# wait "$NPM_PID"

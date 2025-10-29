@@ -290,6 +290,7 @@ export function useRoverROS(): UseRoverROSResult {
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
 
   const socketRef = useRef<Socket | null>(null);
+  const manualDisconnectRef = useRef(false);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffRef = useRef<number>(INITIAL_BACKOFF_MS);
   const connectDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -350,7 +351,16 @@ export function useRoverROS(): UseRoverROSResult {
 
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }, []);
+
   const teardownSocket = useCallback(() => {
+    clearReconnectTimer();
+
     if (connectDelayRef.current) {
       clearTimeout(connectDelayRef.current);
       connectDelayRef.current = null;
@@ -362,8 +372,12 @@ export function useRoverROS(): UseRoverROSResult {
     }
 
     if (socketRef.current) {
+      manualDisconnectRef.current = true;
       socketRef.current.removeAllListeners();
       socketRef.current.disconnect();
+      setTimeout(() => {
+        manualDisconnectRef.current = false;
+      }, 0);
       socketRef.current = null;
     }
 
@@ -371,7 +385,7 @@ export function useRoverROS(): UseRoverROSResult {
       clearTimeout(pendingDispatchRef.current);
       pendingDispatchRef.current = null;
     }
-  }, []);
+  }, [clearReconnectTimer]);
 
   const scheduleReconnect = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -427,6 +441,7 @@ export function useRoverROS(): UseRoverROSResult {
 
         socket.on('connect', () => {
           console.log('Socket connected successfully');
+          clearReconnectTimer();
           backoffRef.current = INITIAL_BACKOFF_MS;
           setConnectionState('connected');
           socket.emit('ping');
@@ -444,6 +459,10 @@ export function useRoverROS(): UseRoverROSResult {
 
         socket.on('disconnect', (reason) => {
           console.warn('Socket disconnected:', reason);
+          if (manualDisconnectRef.current) {
+            manualDisconnectRef.current = false;
+            return;
+          }
           setConnectionState('disconnected');
           if (reason === 'io server disconnect') {
             socket.connect();
@@ -459,6 +478,7 @@ export function useRoverROS(): UseRoverROSResult {
 
         socket.io.on('reconnect', (attempt) => {
           console.log('Socket reconnected after', attempt, 'attempts');
+          clearReconnectTimer();
           backoffRef.current = INITIAL_BACKOFF_MS;
           setConnectionState('connected');
         });
@@ -475,6 +495,7 @@ export function useRoverROS(): UseRoverROSResult {
 
         socket.io.on('reconnect_failed', () => {
           console.error('Failed to reconnect');
+          clearReconnectTimer();
           setConnectionState('error');
         });
 
@@ -496,16 +517,13 @@ export function useRoverROS(): UseRoverROSResult {
         scheduleReconnect();
       }
     }, 100);
-  }, [handleBridgeTelemetry, handleRoverData, scheduleReconnect, teardownSocket]);
+  }, [clearReconnectTimer, handleBridgeTelemetry, handleRoverData, scheduleReconnect, teardownSocket]);
 
   const reconnect = useCallback(() => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
+    clearReconnectTimer();
     backoffRef.current = INITIAL_BACKOFF_MS;
     connectSocket();
-  }, [connectSocket]);
+  }, [clearReconnectTimer, connectSocket]);
 
   useEffect(() => {
     connectSocketRef.current = connectSocket;
@@ -542,12 +560,10 @@ export function useRoverROS(): UseRoverROSResult {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('online', handleOnline);
       
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-      }
+      clearReconnectTimer();
       teardownSocket();
     };
-  }, [connectSocket, teardownSocket, reconnect]);
+  }, [clearReconnectTimer, connectSocket, teardownSocket, reconnect]);
 
 const pushStatePatch = useCallback(
   (patch: Partial<TelemetryState>) => {

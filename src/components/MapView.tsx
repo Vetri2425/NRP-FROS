@@ -45,6 +45,20 @@ const MAP_COMMANDS = new Set<string>([
   'LOITER_TURNS',
 ]);
 
+// Temporary raster/SVG rover icon used for quick swapping without touching
+// the existing `RoverIcon` React component. This is a compact top-down car
+// SVG encoded as markup so it can be injected into a Leaflet `divIcon`.
+const ROVER_SVG = `
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" width="32" height="32" style="display:block">
+  <rect x="6" y="14" width="52" height="36" rx="6" ry="6" fill="#e11d1d" stroke="#8b0000" stroke-width="1" />
+  <rect x="12" y="20" width="40" height="16" rx="2" ry="2" fill="#111" opacity="0.9" />
+  <rect x="14" y="38" width="10" height="6" fill="#111" />
+  <rect x="40" y="38" width="10" height="6" fill="#111" />
+  <rect x="20" y="18" width="8" height="6" fill="#fff" opacity="0.15" />
+  <rect x="36" y="18" width="8" height="6" fill="#fff" opacity="0.15" />
+</svg>
+`;
+
 const getWaypointIcon = (waypoint: Waypoint, index: number, total: number, activeId: number | null | undefined): any => {
     const isActive = waypoint.id === activeId;
     const isStart = index === 0;
@@ -366,14 +380,18 @@ const MapView: React.FC<MapViewProps> = ({
 
   useEffect(() => {
     if (!mapRef.current) return;
-    if (roverPosition) {
-        const roverIconHTML = renderToStaticMarkup(<RoverIcon className="w-8 h-8 text-sky-400" heading={heading || 0} />);
-        const roverIcon = L.divIcon({ html: roverIconHTML, className: 'bg-transparent border-0', iconSize: [32, 32], iconAnchor: [16, 16] });
+  if (roverPosition) {
+    // Use the temporary inline SVG as the marker content and rotate via a
+    // wrapping div. This keeps behavior similar to the previous SVG React
+    // component but makes swapping the image trivial.
+    const angle = heading || 0;
+    const roverIconHTML = `<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;transform:rotate(${angle}deg);">${ROVER_SVG}</div>`;
+    const roverIcon = L.divIcon({ html: roverIconHTML, className: 'bg-transparent border-0', iconSize: [32, 32], iconAnchor: [16, 16] });
         if (!roverMarkerRef.current) {
             roverMarkerRef.current = L.marker([roverPosition.lat, roverPosition.lng], { icon: roverIcon, zIndexOffset: 1000 }).addTo(mapRef.current);
         } else {
             roverMarkerRef.current.setLatLng([roverPosition.lat, roverPosition.lng]);
-            roverMarkerRef.current.setIcon(roverIcon);
+      roverMarkerRef.current.setIcon(roverIcon);
         }
         // shift samples for interpolation
         const now = performance.now();
@@ -406,7 +424,7 @@ const MapView: React.FC<MapViewProps> = ({
     roverMarkerRef.current.setLatLng([lat, lng]);
     // throttle icon updates to ~10 Hz
     if (now - lastIconUpdateRef.current > 100) {
-      const roverIconHTML = renderToStaticMarkup(<RoverIcon className="w-8 h-8 text-sky-400" heading={hdg || 0} />);
+      const roverIconHTML = `<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;transform:rotate(${hdg || 0}deg);">${ROVER_SVG}</div>`;
       const roverIcon = L.divIcon({ html: roverIconHTML, className: 'bg-transparent border-0', iconSize: [32, 32], iconAnchor: [16, 16] });
       roverMarkerRef.current.setIcon(roverIcon);
       lastIconUpdateRef.current = now;

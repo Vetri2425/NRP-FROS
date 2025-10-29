@@ -317,6 +317,7 @@ class MavrosBridge:
 
         self._broadcast_telem({
             "mode": str(message.get("mode", "UNKNOWN")),
+            "armed": bool(message.get("armed", False)),
             "status": "armed" if bool(message.get("armed", False)) else "disarmed",
             "connected": connected
         }, message_type="state")
