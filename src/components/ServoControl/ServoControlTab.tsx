@@ -5,25 +5,29 @@ import ConfigEditor from "./ConfigEditor";
 import StatusPanel from "./StatusPanel";
 import LogViewer from "./LogViewer";
 import ReportPanel from "./ReportPanel";
+import { BACKEND_URL } from "../../config";
 
 export default function ServoControlTab() {
   const [status, setStatus] = useState<any>({});
   const [selectedMode, setSelectedMode] = useState<string>("wpmark");
   const [logText, setLogText] = useState<string>("");
 
-  // Use the same backend (port 5001) under /servo
-  const base = (import.meta as any)?.env?.VITE_JETSON_BACKEND_URL || "http://localhost:5001";
-  const JETSON_API = `${String(base).replace(/\/$/, '')}/servo`;
+  // Use the same backend URL from config (reads from .env or uses current hostname)
+  const JETSON_API = `${BACKEND_URL}/servo`;
 
   // Helper to fetch status
   const refreshStatus = async () => {
     try {
       const res = await fetch(`${JETSON_API}/status`);
-      if (!res.ok) return;
+      if (!res.ok) {
+        // Backend not available - silently fail
+        return;
+      }
       const data = await res.json();
       setStatus(data);
-    } catch (_) {
-      /* ignore */
+    } catch (err) {
+      // Backend not running - this is expected if servo backend is not started
+      // Silently fail to avoid console spam
     }
   };
 
@@ -32,12 +36,13 @@ export default function ServoControlTab() {
     refreshStatus();
     const interval = setInterval(refreshStatus, 2000);
     return () => clearInterval(interval);
-  }, [JETSON_API]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array since JETSON_API is constant
 
   return (
-    <div className="p-4 grid grid-cols-2 gap-4 w-full text-white">
-      <div className="flex flex-col gap-4">
-        <h2 className="text-xl font-bold mb-2 text-orange-400">Servo Control Center</h2>
+    <div className="w-full h-full overflow-y-auto custom-scrollbar p-3 grid grid-cols-2 gap-3 text-white">
+      <div className="flex flex-col gap-3">
+        <h2 className="text-lg font-bold text-orange-400">Servo Control Center</h2>
         <ModeSelector
           selectedMode={selectedMode}
           setSelectedMode={setSelectedMode}
@@ -53,7 +58,7 @@ export default function ServoControlTab() {
         />
       </div>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3">
         <StatusPanel status={status} />
         <LogViewer logText={logText} setLogText={setLogText} JETSON_API={JETSON_API} status={status} />
         <ReportPanel status={status} />

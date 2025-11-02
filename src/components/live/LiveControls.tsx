@@ -14,8 +14,9 @@ const LiveControls: React.FC<LiveControlsProps> = ({ isConnected, currentWaypoin
     const [isPaused, setIsPaused] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Use telemetry data as source of truth
     const totalWaypoints = telemetry.mission.total_wp || 0;
-    const currentWp = currentWaypoint || telemetry.mission.current_wp || 0;
+    const currentWp = telemetry.mission.current_wp || currentWaypoint || 0;
 
     const handleSkip = async () => {
         if (!isConnected || isLoading) return;

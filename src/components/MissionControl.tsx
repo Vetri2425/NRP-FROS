@@ -13,10 +13,18 @@ const MissionControl: React.FC<MissionControlProps> = ({
   onMissionDownloaded,
   onMissionCleared,
 }) => {
-  const { telemetry, services } = useRover();
+  const { telemetry, services, roverPosition } = useRover();
   const [isBusy, setIsBusy] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Log only when mission status changes
+  React.useEffect(() => {
+    console.log('[DATA FLOW] 🎯 MissionControl - Status changed:', {
+      status: telemetry.mission.status,
+      progress: telemetry.mission.progress_pct,
+    });
+  }, [telemetry.mission.status]);
 
   const hasMissionBuffer = missionWaypoints.length > 0;
 

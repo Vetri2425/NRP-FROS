@@ -24,9 +24,20 @@ export default function LogViewer({ status, JETSON_API, logText, setLogText }: a
   }, [status]);
 
   return (
-    <div className="bg-slate-900 border border-slate-700 p-4 rounded-lg h-64 overflow-y-scroll text-green-300 text-xs">
-      <h3 className="font-semibold text-slate-200">Logs</h3>
-      <pre className="whitespace-pre-wrap">{logText || "No logs yet..."}</pre>
+    <div className="bg-slate-900 border border-slate-700 p-3 rounded-lg h-64 flex flex-col">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-semibold text-slate-200 text-sm">Logs</h3>
+        <button
+          onClick={() => setLogText("")}
+          className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+          title="Clear console"
+        >
+          Clear
+        </button>
+      </div>
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <pre className="whitespace-pre-wrap text-green-300 text-xs">{logText || "No logs yet..."}</pre>
+      </div>
     </div>
   );
 }

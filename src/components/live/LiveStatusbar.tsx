@@ -13,8 +13,17 @@ type LiveStatusbarProps = {
 
 const StatusItem: React.FC<{ label: string; value: string | number; unit?: string; status?: string }> = ({ label, value, unit, status }) => {
     let statusClass = '';
-    if (status === 'OK 81%' || status === 'ALIGNED' || status === 'RTK Fixed') statusClass = 'bg-green-600 text-white';
-    else if (status) statusClass = 'bg-blue-500 text-white';
+    if (status === 'ALIGNED' || status?.includes('RTK Fixed')) {
+        statusClass = 'bg-green-600 text-white';
+    } else if (status?.includes('OK') && !status.includes('LOW')) {
+        statusClass = 'bg-green-600 text-white';
+    } else if (status?.includes('LOW')) {
+        statusClass = 'bg-red-600 text-white';
+    } else if (status?.includes('RTK Float') || status?.includes('DGPS')) {
+        statusClass = 'bg-yellow-600 text-white';
+    } else if (status) {
+        statusClass = 'bg-blue-500 text-white';
+    }
 
     return (
         <div className="flex justify-between items-center text-sm">
@@ -41,7 +50,30 @@ const InfoItem: React.FC<{ label: string; children: React.ReactNode }> = ({ labe
 );
 
 const LiveStatusbar: React.FC<LiveStatusbarProps> = ({ missionName, waypoints, liveRoverData }) => {
-  const { completedWaypointIds = [], activeWaypointIndex, distanceToNext } = liveRoverData;
+  const { 
+    completedWaypointIds = [], 
+    activeWaypointIndex, 
+    distanceToNext, 
+    battery, 
+    voltage, 
+    rtk_status, 
+    imu_status,
+    satellites_visible,
+    fix_type
+  } = liveRoverData;
+
+  // 🔍 DEBUG: Log what LiveStatusbar receives
+  React.useEffect(() => {
+    console.log('[LiveStatusbar] Received liveRoverData:', {
+      rtk_status,
+      fix_type,
+      satellites_visible,
+      battery,
+      voltage,
+      'has_position': !!liveRoverData.position
+    });
+  }, [rtk_status, fix_type, satellites_visible, battery, voltage, liveRoverData.position]);
+
   const activeWaypointId =
     activeWaypointIndex !== null && activeWaypointIndex !== undefined
       ? activeWaypointIndex + 1
@@ -59,17 +91,42 @@ const LiveStatusbar: React.FC<LiveStatusbarProps> = ({ missionName, waypoints, l
       }
   }
 
+  // Format battery voltage properly
+  const batteryVoltage = voltage ? voltage.toFixed(2) : '0.00';
+  const batteryPercentage = battery ? Math.round(battery) : 0;
+  const batteryStatus = batteryPercentage > 20 ? `OK ${batteryPercentage}%` : `LOW ${batteryPercentage}%`;
+  
+  // Format HRMS and VRMS
+  const hrmsValue = typeof liveRoverData.hrms === 'number' ? liveRoverData.hrms.toFixed(3) : liveRoverData.hrms;
+  const vrmsValue = typeof liveRoverData.vrms === 'number' ? liveRoverData.vrms.toFixed(3) : liveRoverData.vrms;
+  
+  // Determine IMU status
+  const imuStatusText = imu_status && imu_status !== 'UNKNOWN' ? imu_status : 'ALIGNED';
+  
+  // Satellites
+  const satellitesCount = satellites_visible ?? 0;
+
+  // 🔍 DEBUG: Log final display values
+  console.log('[LiveStatusbar] Display values:', {
+    'GPS/RTK status': rtk_status || 'No Fix',
+    'Satellites': satellitesCount,
+    'Battery': batteryStatus
+  });
+
   return (
     <div className="h-full grid grid-cols-3 gap-4 text-white">
       {/* Panel 1: Status */}
       <div className="bg-[#111827] rounded-lg p-3 flex flex-col">
-        <h3 className="text-center font-bold text-gray-400 border-b border-gray-700 pb-2 mb-3">Status</h3>
-        <div className="space-y-3">
-            <StatusItem label="Battery" value={`${liveRoverData.battery}.07`} unit="v" status={`OK ${liveRoverData.battery}%`} />
-            <StatusItem label="GPS" value="" status={liveRoverData.rtk_status} />
-            <StatusItem label="HRMS" value={liveRoverData.hrms} />
-            <StatusItem label="VRMS" value={liveRoverData.vrms} />
-            <StatusItem label="IMU" value="" status={liveRoverData.imu_status} />
+        <div className="border-b border-gray-700 pb-2 mb-3">
+          <h3 className="font-bold text-gray-400 text-center">Status</h3>
+        </div>
+        <div className="space-y-2">
+            <StatusItem label="Battery" value={batteryVoltage} unit="v" status={batteryStatus} />
+            <StatusItem label="GPS/RTK" value="" status={rtk_status || 'No Fix'} />
+            <StatusItem label="Satellites" value={satellitesCount} />
+            <StatusItem label="HRMS" value={hrmsValue} unit="m" />
+            <StatusItem label="VRMS" value={vrmsValue} unit="m" />
+            <StatusItem label="IMU" value="" status={imuStatusText} />
         </div>
       </div>
 
@@ -86,16 +143,48 @@ const LiveStatusbar: React.FC<LiveStatusbarProps> = ({ missionName, waypoints, l
       <div className="bg-[#111827] rounded-lg p-3 flex items-center justify-around">
         <InfoItem label="Marked Point">
             <p className="text-2xl font-bold bg-gray-600 px-4 py-1 rounded-md">{lastCompletedWp ? `p${lastCompletedWp.id}` : '---'}</p>
-            <p className="text-lg font-bold text-white bg-blue-600 px-4 py-1 mt-2 rounded-md">Type A</p>
+            {lastCompletedWp ? (
+              <>
+                <p className="text-xs text-gray-400 mt-1">
+                  Lat: {lastCompletedWp.lat.toFixed(7)}
+                </p>
+                <p className="text-xs text-gray-400">
+                  Lng: {lastCompletedWp.lng.toFixed(7)}
+                </p>
+                <p className="text-sm font-bold text-white bg-blue-600 px-3 py-1 mt-1 rounded-md">
+                  {lastCompletedWp.command || 'WAYPOINT'}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm font-bold text-white bg-gray-500 px-3 py-1 mt-2 rounded-md">N/A</p>
+            )}
         </InfoItem>
         <InfoItem label="Delta Elevation">
-             <p className={`text-4xl font-bold p-2 rounded-md ${deltaElevation > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {deltaElevation >= 0 ? '+' : ''}{deltaElevation.toFixed(2)}' f {deltaElevation >= 0 ? '↑' : '↓'}
+             <p className={`text-4xl font-bold p-2 rounded-md ${deltaElevation > 0 ? 'text-green-400' : deltaElevation < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                {deltaElevation !== 0 ? (
+                  <>{deltaElevation >= 0 ? '+' : ''}{deltaElevation.toFixed(2)}' f {deltaElevation >= 0 ? '↑' : '↓'}</>
+                ) : (
+                  '---'
+                )}
              </p>
         </InfoItem>
         <InfoItem label="Next Point">
-            <p className="text-2xl font-bold bg-gray-600 px-4 py-1 rounded-md">{nextWp ? `p${nextWp.id}` : '---'}</p>
-            <p className="text-lg font-bold text-white bg-blue-600 px-4 py-1 mt-2 rounded-md">Type B</p>
+            <p className="text-2xl font-bold bg-orange-500 px-4 py-1 rounded-md">{nextWp ? `p${nextWp.id}` : '---'}</p>
+            {nextWp ? (
+              <>
+                <p className="text-xs text-gray-400 mt-1">
+                  Lat: {nextWp.lat.toFixed(7)}
+                </p>
+                <p className="text-xs text-gray-400">
+                  Lng: {nextWp.lng.toFixed(7)}
+                </p>
+                <p className="text-sm font-bold text-white bg-blue-600 px-3 py-1 mt-1 rounded-md">
+                  {nextWp.command || 'WAYPOINT'}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm font-bold text-white bg-gray-500 px-3 py-1 mt-2 rounded-md">N/A</p>
+            )}
         </InfoItem>
       </div>
     </div>

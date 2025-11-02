@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Servo Fetch Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1e293b; color: white; }
+        button { padding: 10px 20px; margin: 10px; cursor: pointer; background: #3b82f6; border: none; border-radius: 5px; color: white; }
+        button:hover { background: #2563eb; }
+        #result { background: #334155; padding: 15px; border-radius: 5px; margin-top: 20px; white-space: pre-wrap; }
+        .error { color: #ef4444; }
+        .success { color: #22c55e; }
+    </style>
+</head>
+<body>
+    <h1>Servo API Test - External Browser</h1>
+    <p>Testing connection to: <strong>http://192.168.1.29:5001/servo/status</strong></p>
+    
+    <button onclick="testServoStatus()">Test /servo/status</button>
+    <button onclick="testServoRun()">Test /servo/run?mode=wpmark</button>
+    <button onclick="testBackendRoot()">Test Backend Root</button>
+    
+    <div id="result">Results will appear here...</div>
+
+    <script>
+        const BACKEND_URL = 'http://192.168.1.29:5001';
+        const resultDiv = document.getElementById('result');
+
+        async function testServoStatus() {
+            resultDiv.textContent = 'Testing /servo/status...';
+            try {
+                const response = await fetch(`${BACKEND_URL}/servo/status`);
+                const data = await response.json();
+                resultDiv.className = 'success';
+                resultDiv.textContent = `✅ SUCCESS!\n\nStatus: ${response.status}\nData: ${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.textContent = `❌ FAILED!\n\nError: ${error.message}\nType: ${error.name}\n\nThis could mean:\n1. Network/Firewall blocking\n2. Server not running\n3. CORS issue\n4. Mixed content (HTTP vs HTTPS)`;
+            }
+        }
+
+        async function testServoRun() {
+            resultDiv.textContent = 'Testing /servo/run...';
+            try {
+                const response = await fetch(`${BACKEND_URL}/servo/run?mode=wpmark`);
+                const data = await response.json();
+                resultDiv.className = response.ok ? 'success' : 'error';
+                resultDiv.textContent = `${response.ok ? '✅' : '⚠️'} Response!\n\nStatus: ${response.status}\nData: ${JSON.stringify(data, null, 2)}`;
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.textContent = `❌ FAILED!\n\nError: ${error.message}\nType: ${error.name}`;
+            }
+        }
+
+        async function testBackendRoot() {
+            resultDiv.textContent = 'Testing backend root...';
+            try {
+                const response = await fetch(`${BACKEND_URL}/`);
+                const text = await response.text();
+                resultDiv.className = 'success';
+                resultDiv.textContent = `✅ Backend reachable!\n\nStatus: ${response.status}\nContent: ${text.substring(0, 200)}...`;
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.textContent = `❌ FAILED!\n\nError: ${error.message}`;
+            }
+        }
+
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            setTimeout(testServoStatus, 1000);
+        });
+    </script>
+</body>
+</html>

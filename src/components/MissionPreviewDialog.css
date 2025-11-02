@@ -1,0 +1,243 @@
+/* Mission Preview Dialog Specific Styles */
+.mission-preview-dialog {
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.dialog-subtitle {
+  margin: 8px 0 0 0;
+  font-size: 13px;
+  color: #666;
+  font-weight: normal;
+}
+
+/* Sections */
+.format-info-section,
+.format-selection-section,
+.export-options-section,
+.statistics-section,
+.waypoints-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #eee;
+}
+
+.statistics-section h3,
+.format-info-section h3,
+.format-selection-section h3,
+.export-options-section h3,
+.waypoints-section h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Statistics Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.stat-item,
+.info-item,
+.format-info .info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+}
+
+.stat-label,
+.info-label {
+  font-size: 13px;
+  color: #666;
+  font-weight: 500;
+}
+
+.stat-value,
+.info-value {
+  font-size: 13px;
+  color: #333;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+/* Validation Section */
+.validation-section {
+  margin-bottom: 20px;
+  padding: 12px;
+  border-radius: 4px;
+  background-color: #fff3cd;
+}
+
+.validation-error,
+.validation-warning {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 4px 0;
+}
+
+.validation-error {
+  color: #d32f2f;
+}
+
+.validation-warning {
+  color: #f57c00;
+}
+
+/* Waypoints Table */
+.waypoints-section {
+  margin-bottom: 20px;
+}
+
+.waypoints-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.waypoints-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.waypoints-table thead {
+  background-color: #f5f5f5;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.waypoints-table th,
+.waypoints-table td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+}
+
+.waypoints-table th {
+  font-weight: 600;
+  color: #333;
+}
+
+.waypoints-table td {
+  color: #666;
+  font-family: monospace;
+}
+
+.waypoints-table tbody tr:hover {
+  background-color: #f9f9f9;
+}
+
+/* Format Options */
+.format-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.format-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.format-option {
+  display: flex;
+  align-items: flex-start;
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.format-option:hover {
+  border-color: #2196F3;
+  background-color: #f0f7ff;
+}
+
+.format-option input[type="radio"] {
+  margin-right: 12px;
+  margin-top: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.format-option input[type="radio"]:checked {
+  accent-color: #2196F3;
+}
+
+.format-option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.format-name {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+}
+
+.format-description {
+  display: block;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Export Options */
+.option-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.option-checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.option-checkbox span {
+  font-size: 14px;
+  color: #333;
+}
+
+/* Dialog Checkbox (Don't show again) */
+.dialog-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+}
+
+.dialog-checkbox input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.dialog-checkbox label {
+  cursor: pointer;
+  font-size: 13px;
+  color: #666;
+}
+
+/* Button Styles */
+.btn-secondary {
+  background-color: #e0e0e0;
+  color: #333;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #d0d0d0;
+}

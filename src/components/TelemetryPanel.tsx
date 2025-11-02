@@ -17,8 +17,17 @@ const safeFixed = (value: number, digits: number): string => {
 };
 
 const TelemetryPanel: React.FC = () => {
-  const { telemetry, connectionState } = useRover();
+  const { telemetry, connectionState, roverPosition } = useRover();
   const { state, global, battery, mission, rtk, lastMessageTs } = telemetry;
+
+  // Log when specific RTK values change (not on every render)
+  React.useEffect(() => {
+    console.log('[DATA FLOW] 📊 TelemetryPanel - RTK data updated:', {
+      rtk_fix_type: rtk.fix_type,
+      rtk_base_linked: rtk.base_linked,
+      satellites: global.satellites_visible,
+    });
+  }, [rtk.fix_type, rtk.base_linked, global.satellites_visible]);
 
   const armed = state.armed ? 'Yes' : 'No';
   const rtkLabel = (() => {
@@ -38,13 +47,13 @@ const TelemetryPanel: React.FC = () => {
 
   return (
     <div className="bg-[#111827] rounded-lg overflow-hidden flex flex-col">
-      <header className="bg-indigo-700 px-4 py-3 flex items-center justify-between">
-        <span className="font-semibold text-white tracking-wide">Telemetry</span>
+      <header className="bg-indigo-700 px-3 py-2 flex items-center justify-between">
+        <span className="font-semibold text-white tracking-wide text-sm">Telemetry</span>
         <span className="text-xs text-indigo-100 uppercase">{connectionState}</span>
       </header>
 
-      <div className="p-4 flex flex-col gap-4 text-sm text-slate-200">
-        <section className="grid grid-cols-2 gap-3">
+      <div className="p-3 flex flex-col gap-2.5 text-xs text-slate-200">
+        <section className="grid grid-cols-2 gap-2">
           <div>
             <p className="text-xs uppercase text-slate-400">Mode</p>
             <p className="font-semibold">{state.mode || 'UNKNOWN'}</p>
@@ -55,73 +64,48 @@ const TelemetryPanel: React.FC = () => {
               {armed}
             </p>
           </div>
-          <div>
+          <div className="col-span-2">
             <p className="text-xs uppercase text-slate-400">Heartbeat</p>
-            <p className="font-semibold font-mono">{formatTimestamp(state.heartbeat_ts)}</p>
+            <p className="font-semibold font-mono text-xs">{formatTimestamp(state.heartbeat_ts)}</p>
           </div>
         </section>
 
-        <section className="grid grid-cols-2 gap-3">
+        <section className="grid grid-cols-2 gap-2">
           <div>
             <p className="text-xs uppercase text-slate-400">Latitude</p>
-            <p className="font-mono">{safeFixed(global.lat, 7)}</p>
+            <p className="font-mono text-xs">{safeFixed(global.lat, 7)}</p>
           </div>
           <div>
             <p className="text-xs uppercase text-slate-400">Longitude</p>
-            <p className="font-mono">{safeFixed(global.lon, 7)}</p>
+            <p className="font-mono text-xs">{safeFixed(global.lon, 7)}</p>
           </div>
           <div>
             <p className="text-xs uppercase text-slate-400">Altitude (rel)</p>
-            <p className="font-semibold">{safeFixed(global.alt_rel, 1)} m</p>
+            <p className="font-semibold text-xs">{safeFixed(global.alt_rel, 1)} m</p>
           </div>
           <div>
             <p className="text-xs uppercase text-slate-400">Ground Speed</p>
-            <p className="font-semibold">{safeFixed(global.vel, 2)} m/s</p>
+            <p className="font-semibold text-xs">{safeFixed(global.vel, 2)} m/s</p>
           </div>
         </section>
 
-        <section className="grid grid-cols-3 gap-3">
-          <div>
-            <p className="text-xs uppercase text-slate-400">Battery</p>
-            <p className="font-semibold">{safeFixed(battery.percentage, 1)}%</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-slate-400">Voltage</p>
-            <p className="font-semibold">{safeFixed(battery.voltage, 1)} V</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-slate-400">Current</p>
-            <p className="font-semibold">{safeFixed(battery.current, 1)} A</p>
-          </div>
-        </section>
-
-        <section className="grid grid-cols-2 gap-3">
+        <section className="grid grid-cols-2 gap-2">
           <div>
             <p className="text-xs uppercase text-slate-400">Mission</p>
-            <p className="font-semibold">{mission.status}</p>
+            <p className="font-semibold text-xs">{mission.status}</p>
           </div>
           <div>
             <p className="text-xs uppercase text-slate-400">Progress</p>
-            <p className="font-semibold">
+            <p className="font-semibold text-xs">
               {safeFixed(mission.progress_pct, 1)}% ({mission.current_wp}/{mission.total_wp})
             </p>
           </div>
         </section>
 
-        <section className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs uppercase text-slate-400">RTK</p>
-            <p className="font-semibold">{rtkLabel}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase text-slate-400">Satellites</p>
-            <p className="font-semibold">{global.satellites_visible}</p>
-          </div>
-        </section>
+        {/* RTK and Satellites info removed; now shown in RTKPanel */}
 
-        <footer className="text-xs text-slate-500 flex justify-between">
-          <span>Last update: {formatTimestamp(lastMessageTs)}</span>
-          <span>Telemetry age: {lastMessageTs ? `${Date.now() - lastMessageTs} ms` : '—'}</span>
+        <footer className="text-xs text-slate-500 pt-1 border-t border-slate-700">
+          <div className="truncate">Last: {formatTimestamp(lastMessageTs)}</div>
         </footer>
       </div>
     </div>

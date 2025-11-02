@@ -43,7 +43,7 @@ const ServoPanel: React.FC = () => {
   return (
     <div className="bg-[#111827] rounded-lg p-4 flex flex-col gap-4">
       <header className="flex items-center justify-between">
-        <h3 className="text-white font-semibold uppercase tracking-wide text-sm">Servo Control</h3>
+        <h3 className="text-white font-semibold uppercase tracking-wide text-sm">Spray Control</h3>
         <span className={`text-xs font-semibold ${servo.active ? 'text-green-300' : 'text-slate-400'}`}>
           {servo.active ? 'Active' : 'Idle'}
         </span>

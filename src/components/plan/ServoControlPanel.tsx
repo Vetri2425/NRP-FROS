@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { toast } from 'react-toastify';
 import { WrenchIcon } from '../icons/WrenchIcon';
 import type {
   ServoConfig,
@@ -63,7 +64,7 @@ const ServoControlPanel: React.FC<Props> = ({
     offValue: number
   ): (MarkAtWaypointConfig & { fromWp: number; toWp: number }) | null => {
     if (!selectedWaypointIds.length) {
-      alert('Select waypoints on the table or map to define a range.');
+      toast.warning('Select waypoints on the table or map to define a range.');
       return null;
     }
     const total = Math.max(1, totalWaypoints || 1);
@@ -91,7 +92,7 @@ const ServoControlPanel: React.FC<Props> = ({
     offValue: number
   ): (ContinuousLineConfig & { startPoint: number; endPoint: number }) | null => {
     if (!selectedWaypointIds.length) {
-      alert('Select a range of waypoints on the table or map to define the line.');
+      toast.warning('Select a range of waypoints on the table or map to define the line.');
       return null;
     }
     const total = Math.max(1, totalWaypoints || 1);
@@ -101,7 +102,7 @@ const ServoControlPanel: React.FC<Props> = ({
     const end = clamp(maxSel, start, total);
 
     if (start === end) {
-      alert('Select at least two waypoints to define the line.');
+      toast.warning('Select at least two waypoints to define the line.');
       return null;
     }
 
@@ -122,7 +123,7 @@ const ServoControlPanel: React.FC<Props> = ({
     offValue: number
   ): (IntervalSprayConfig & { startWp: number; endWp: number }) | null => {
     if (!totalWaypoints || totalWaypoints < 2) {
-      alert('Load a mission with at least two waypoints before configuring interval spray.');
+      toast.warning('Load a mission with at least two waypoints before configuring interval spray.');
       return null;
     }
     const total = Math.max(1, totalWaypoints || 1);
@@ -132,7 +133,7 @@ const ServoControlPanel: React.FC<Props> = ({
     const end = Math.max(startRaw, endRaw);
 
     if (start === end) {
-      alert('Start and end waypoints must be different for interval spray.');
+      toast.warning('Start and end waypoints must be different for interval spray.');
       return null;
     }
 
@@ -263,7 +264,7 @@ const ServoControlPanel: React.FC<Props> = ({
               );
 
               if (!confirmed) {
-                alert('??O Upload canceled.');
+                toast.info('Upload canceled.');
                 return;
               }
 

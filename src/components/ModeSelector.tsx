@@ -85,13 +85,17 @@ const ModeSelector: React.FC = () => {
   }, [runAction, services, state.armed]);
 
   return (
-    <div className="bg-[#111827] rounded-lg p-4 flex flex-col gap-3">
-      <header className="flex items-center justify-between">
-        <h3 className="text-white font-semibold uppercase tracking-wide text-sm">Mode</h3>
-        <span className="text-xs text-slate-400 font-mono">{normalizedMode}</span>
-      </header>
+    <div className="bg-[#111827] rounded-lg flex flex-col overflow-hidden">
+      {/* Header with Indigo Background */}
+      <div className="bg-indigo-700 text-white text-xs font-bold px-3 py-2 flex items-center justify-between flex-shrink-0">
+        <span className="font-semibold text-white tracking-wide text-sm">Mode Control</span>
+        <span className="text-xs text-indigo-100 uppercase font-mono">{normalizedMode}</span>
+      </div>
 
-      <div className="flex items-center gap-3">
+      {/* Panel Content */}
+      <div className="p-3.5 flex flex-col gap-2">
+
+      <div className="flex items-center gap-2">
         <select
           value={selectedMode}
           onChange={(event) => {
@@ -99,7 +103,7 @@ const ModeSelector: React.FC = () => {
             setSelectedMode(event.target.value);
           }}
           disabled={isLoading}
-          className="bg-[#1F2937] border border-slate-600 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="bg-[#1F2937] border border-slate-600 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 flex-1"
         >
           {options.map((mode) => (
             <option key={mode} value={mode}>
@@ -110,9 +114,9 @@ const ModeSelector: React.FC = () => {
         <button
           onClick={requestModeChange}
           disabled={isLoading || !selectedMode || selectedMode === normalizedMode}
-          className="px-3 py-2 rounded-md text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          Set Mode
+          Set
         </button>
       </div>
 
@@ -127,7 +131,7 @@ const ModeSelector: React.FC = () => {
         <button
           onClick={toggleArmState}
           disabled={isLoading}
-          className={`px-3 py-2 rounded-md text-sm font-semibold transition-colors ${
+          className={`px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors flex-1 ${
             state.armed
               ? 'bg-red-600 hover:bg-red-500 text-white'
               : 'bg-green-600 hover:bg-green-500 text-white'
@@ -146,6 +150,7 @@ const ModeSelector: React.FC = () => {
           {message.text}
         </p>
       )}
+      </div>
     </div>
   );
 };

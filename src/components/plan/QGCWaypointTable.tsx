@@ -89,14 +89,14 @@ const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({
   };
 
   return (
-    <div className="bg-[#111827] h-full rounded-md p-3 flex flex-col text-sm text-gray-300 overflow-hidden" onMouseUp={handleMouseUp}>
-      <h2 className="text-lg font-bold mb-2">Mission Plan (QGC WPL 110)</h2>
-      <div className="flex-1 overflow-y-auto">
+    <div className="bg-[#111827] h-full rounded-md p-2 flex flex-col text-xs text-gray-300 overflow-hidden" onMouseUp={handleMouseUp}>
+      <h2 className="text-sm font-bold mb-1.5">Mission Plan (QGC WPL 110)</h2>
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
         <table className="w-full text-left">
           <thead className="sticky top-0 bg-[#111827]">
             <tr>
               {headers.map(header => (
-                <th key={header} scope="col" className="px-2 py-2 text-xs text-gray-400 uppercase font-medium whitespace-nowrap">
+                <th key={header} scope="col" className="px-1.5 py-1 text-xs text-gray-400 uppercase font-medium whitespace-nowrap">
                   {header}
                 </th>
               ))}
@@ -108,9 +108,9 @@ const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({
                 const isActive = wp.id === activeWaypointIndex;
                 return (
                   <tr key={wp.id} className={`hover:bg-gray-800 ${isActive ? 'bg-green-800/50' : ''} ${selectedWaypointIds.includes(wp.id) ? 'bg-sky-800/40' : ''}`}>
-                    <td className="px-2 py-1">{wp.id}</td>
+                    <td className="px-1.5 py-0.5 text-xs">{wp.id}</td>
                     <td
-                      className="px-2 py-1"
+                      className="px-1.5 py-0.5"
                       onMouseDown={() => handleMouseDown(wp.id)}
                       onMouseEnter={() => handleMouseEnter(wp.id)}
                     >
@@ -121,16 +121,16 @@ const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({
                         readOnly
                       />
                     </td>
-                    <td className="px-2 py-1 text-center">
+                    <td className="px-1.5 py-0.5 text-center">
                       <input type="radio" name="currentItem" checked={(wp.current ?? (index === 0 ? 1 : 0)) === 1}
                         onChange={() => handleSetCurrent(wp.id)} />
                     </td>
-                    <td className="px-2 py-1"><input type="number" value={wp.frame} onChange={(e) => handleValueChange(wp.id, 'frame', e.target.value)} className="bg-gray-700 w-16 p-1 rounded" /></td>
-                    <td className="px-2 py-1">
+                    <td className="px-1.5 py-0.5"><input type="number" value={wp.frame} onChange={(e) => handleValueChange(wp.id, 'frame', e.target.value)} className="bg-gray-700 w-14 p-0.5 rounded text-xs" /></td>
+                    <td className="px-1.5 py-0.5">
                       <select
                         value={wp.command}
                         onChange={(e) => handleCommandChange(e, wp.id)}
-                        className="bg-gray-700 border-gray-600 rounded p-1 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 w-full"
+                        className="bg-gray-700 border-gray-600 rounded p-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-green-500 w-full"
                       >
                         {/* Navigation Commands */}
                         <optgroup label="━━ Navigation ━━">
@@ -152,55 +152,55 @@ const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({
                         </optgroup>
                       </select>
                     </td>
-                    <td className="px-2 py-1">
+                    <td className="px-1.5 py-0.5">
                       <input 
                         type="number" 
                         value={wp.param1 || 0} 
                         onChange={(e) => handleValueChange(wp.id, 'param1', e.target.value)} 
-                        className="bg-gray-700 w-20 p-1 rounded text-xs" 
+                        className="bg-gray-700 w-16 p-0.5 rounded text-xs" 
                         title={getParamLabel(wp.command, 1)}
                         placeholder={getParamLabel(wp.command, 1)}
                       />
                     </td>
-                    <td className="px-2 py-1">
+                    <td className="px-1.5 py-0.5">
                       <input 
                         type="number" 
                         value={wp.param2 || 0} 
                         onChange={(e) => handleValueChange(wp.id, 'param2', e.target.value)} 
-                        className="bg-gray-700 w-20 p-1 rounded text-xs" 
+                        className="bg-gray-700 w-16 p-0.5 rounded text-xs" 
                         title={getParamLabel(wp.command, 2)}
                         placeholder={getParamLabel(wp.command, 2)}
                       />
                     </td>
-                    <td className="px-2 py-1">
+                    <td className="px-1.5 py-0.5">
                       <input 
                         type="number" 
                         value={wp.param3 || 0} 
                         onChange={(e) => handleValueChange(wp.id, 'param3', e.target.value)} 
-                        className="bg-gray-700 w-20 p-1 rounded text-xs" 
+                        className="bg-gray-700 w-16 p-0.5 rounded text-xs" 
                         title={getParamLabel(wp.command, 3)}
                         placeholder={getParamLabel(wp.command, 3)}
                       />
                     </td>
-                    <td className="px-2 py-1">
+                    <td className="px-1.5 py-0.5">
                       <input 
                         type="number" 
                         value={wp.param4 || 0} 
                         onChange={(e) => handleValueChange(wp.id, 'param4', e.target.value)} 
-                        className="bg-gray-700 w-20 p-1 rounded text-xs" 
+                        className="bg-gray-700 w-16 p-0.5 rounded text-xs" 
                         title={getParamLabel(wp.command, 4)}
                         placeholder={getParamLabel(wp.command, 4)}
                       />
                     </td>
-                    <td className="px-2 py-1 font-mono"><input type="number" step="0.000001" value={wp.lat} onChange={(e) => handleValueChange(wp.id, 'lat', e.target.value)} className="bg-gray-700 w-28 p-1 rounded" /></td>
-                    <td className="px-2 py-1 font-mono"><input type="number" step="0.000001" value={wp.lng} onChange={(e) => handleValueChange(wp.id, 'lng', e.target.value)} className="bg-gray-700 w-28 p-1 rounded" /></td>
-                    <td className="px-2 py-1"><input type="number" value={wp.alt} onChange={(e) => handleValueChange(wp.id, 'alt', e.target.value)} className="bg-gray-700 w-20 p-1 rounded" /></td>
-                    <td className="px-2 py-1 text-center">
+                    <td className="px-1.5 py-0.5 font-mono"><input type="number" step="0.000001" value={wp.lat} onChange={(e) => handleValueChange(wp.id, 'lat', e.target.value)} className="bg-gray-700 w-24 p-0.5 rounded text-xs" /></td>
+                    <td className="px-1.5 py-0.5 font-mono"><input type="number" step="0.000001" value={wp.lng} onChange={(e) => handleValueChange(wp.id, 'lng', e.target.value)} className="bg-gray-700 w-24 p-0.5 rounded text-xs" /></td>
+                    <td className="px-1.5 py-0.5"><input type="number" value={wp.alt} onChange={(e) => handleValueChange(wp.id, 'alt', e.target.value)} className="bg-gray-700 w-16 p-0.5 rounded text-xs" /></td>
+                    <td className="px-1.5 py-0.5 text-center">
                       <input type="checkbox" checked={(wp.autocontinue ?? 1) === 1} onChange={(e) => handleAutoToggle(wp.id, e.target.checked)} />
                     </td>
-                    <td className="px-2 py-1">
-                      <button onClick={() => onDelete(wp.id)} className="text-red-500 hover:text-red-400 p-1">
-                        <TrashIcon className="w-5 h-5" />
+                    <td className="px-1.5 py-0.5">
+                      <button onClick={() => onDelete(wp.id)} className="text-red-500 hover:text-red-400 p-0.5">
+                        <TrashIcon className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
@@ -208,7 +208,7 @@ const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({
               })
             ) : (
                 <tr>
-                    <td colSpan={headers.length} className="text-center py-8 text-gray-500">
+                    <td colSpan={headers.length} className="text-center py-4 text-gray-500 text-xs">
                         Upload a mission file or use the drawing tools to begin.
                     </td>
                 </tr>

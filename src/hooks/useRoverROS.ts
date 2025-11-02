@@ -3,6 +3,7 @@ import { io, type ManagerOptions, type Socket, type SocketOptions } from 'socket
 import { BACKEND_URL } from '../config';
 import type { Waypoint } from '../types';
 import type {
+  NetworkData,
   RoverTelemetry,
   ServiceResponse,
   ServoStatus,
@@ -89,6 +90,15 @@ const DEFAULT_SERVO: ServoStatus = {
   last_command_ts: 0,
 };
 
+const DEFAULT_NETWORK: NetworkData = {
+  connection_type: 'none',
+  wifi_signal_strength: 0,
+  wifi_rssi: -100,
+  interface: '',
+  wifi_connected: false,
+  lora_connected: false,
+};
+
 const createDefaultTelemetry = (): RoverTelemetry => ({
   state: { ...DEFAULT_STATE },
   global: { ...DEFAULT_GLOBAL },
@@ -96,6 +106,7 @@ const createDefaultTelemetry = (): RoverTelemetry => ({
   rtk: { ...DEFAULT_RTK },
   mission: { ...DEFAULT_MISSION },
   servo: { ...DEFAULT_SERVO },
+  network: { ...DEFAULT_NETWORK },
   lastMessageTs: null,
 });
 
@@ -167,16 +178,25 @@ const toTelemetryEnvelopeFromRoverData = (data: any): TelemetryEnvelope | null =
     touched = true;
   }
 
+  // Global Position - with validation
   if (data.position && typeof data.position === 'object') {
     const { lat, lng } = data.position as { lat?: number; lng?: number };
-    envelope.global = {
-      lat: typeof lat === 'number' ? lat : 0,
-      lon: typeof lng === 'number' ? lng : 0,
-      alt_rel: typeof data.distanceToNext === 'number' ? data.distanceToNext : 0,
-      vel: 0,
-      satellites_visible: typeof data.satellites_visible === 'number' ? data.satellites_visible : 0,
-    };
-    touched = true;
+    const hasValidLat = typeof lat === 'number' && lat !== 0;
+    const hasValidLng = typeof lng === 'number' && lng !== 0;
+    
+    if (hasValidLat && hasValidLng) {
+      envelope.global = {
+        lat,
+        lon: lng,
+        alt_rel: typeof data.distanceToNext === 'number' ? data.distanceToNext : 0,
+        vel: 0,
+        satellites_visible: typeof data.satellites_visible === 'number' ? data.satellites_visible : 0,
+      };
+      touched = true;
+      
+      // Log position updates (less verbose)
+      console.log('[DATA FLOW] 🔵 Server → Position:', { lat: lat.toFixed(6), lng: lng.toFixed(6) });
+    }
   }
 
   if (data.battery != null || data.voltage != null || data.current != null) {
@@ -188,13 +208,29 @@ const toTelemetryEnvelopeFromRoverData = (data: any): TelemetryEnvelope | null =
     touched = true;
   }
 
-  if (data.rtk_status) {
-    const fixType = mapRtkStatusToFixType(data.rtk_status);
+  // Handle RTK data - check multiple possible formats
+  if (data.rtk_status || data.fix_type != null || data.rtk_fix_type != null) {
+    let fixType = 0;
+    
+    // Priority 1: Use rtk_fix_type (server sends this)
+    if (typeof data.rtk_fix_type === 'number') {
+      fixType = data.rtk_fix_type;
+    }
+    // Priority 2: Use fix_type directly if provided as number
+    else if (typeof data.fix_type === 'number') {
+      fixType = data.fix_type;
+    }
+    // Priority 3: Parse rtk_status string
+    else if (data.rtk_status) {
+      fixType = mapRtkStatusToFixType(data.rtk_status);
+    }
+    
     envelope.rtk = {
       fix_type: fixType,
-      baseline_age: 0,
-      base_linked: fixType >= 3,
+      baseline_age: typeof data.rtk_baseline_age === 'number' ? data.rtk_baseline_age : (typeof data.baseline_age === 'number' ? data.baseline_age : 0),
+      base_linked: typeof data.rtk_base_linked === 'boolean' ? data.rtk_base_linked : (typeof data.base_linked === 'boolean' ? data.base_linked : fixType >= 5),
     };
+    console.log('[RTK DEBUG] rover_data - fix_type:', fixType, 'rtk_status:', data.rtk_status, 'base_linked:', envelope.rtk.base_linked);
     touched = true;
   }
 
@@ -248,6 +284,20 @@ const toTelemetryEnvelopeFromRoverData = (data: any): TelemetryEnvelope | null =
     touched = true;
   }
 
+  // Handle network telemetry
+  if (data.network && typeof data.network === 'object') {
+    const network = data.network;
+    envelope.network = {
+      connection_type: network.connection_type || 'none',
+      wifi_signal_strength: typeof network.wifi_signal_strength === 'number' ? network.wifi_signal_strength : 0,
+      wifi_rssi: typeof network.wifi_rssi === 'number' ? network.wifi_rssi : -100,
+      interface: network.interface || '',
+      wifi_connected: Boolean(network.wifi_connected),
+      lora_connected: Boolean(network.lora_connected),
+    };
+    touched = true;
+  }
+
   return touched ? (envelope as TelemetryEnvelope) : null;
 };
 
@@ -288,6 +338,49 @@ const toTelemetryEnvelopeFromBridge = (data: any): TelemetryEnvelope | null => {
     touched = true;
   }
 
+  // Extract global data (if backend sends it separately)
+  if (data.global && typeof data.global === 'object') {
+    envelope.global = {
+      lat: typeof data.global.latitude === 'number' ? data.global.latitude : (envelope.global?.lat ?? 0),
+      lon: typeof data.global.longitude === 'number' ? data.global.longitude : (envelope.global?.lon ?? 0),
+      alt_rel: typeof data.global.altitude === 'number' ? data.global.altitude : (envelope.global?.alt_rel ?? 0),
+      vel: typeof data.global.vel === 'number' ? data.global.vel : 0,
+      satellites_visible: typeof data.global.satellites_visible === 'number' ? data.global.satellites_visible : 0,
+    };
+    touched = true;
+  }
+
+  // Extract RTK data (CRITICAL FIX - this was missing!)
+  if (data.rtk && typeof data.rtk === 'object') {
+    envelope.rtk = {
+      fix_type: typeof data.rtk.fix_type === 'number' ? data.rtk.fix_type : 0,
+      baseline_age: typeof data.rtk.baseline_age === 'number' ? data.rtk.baseline_age : 0,
+      base_linked: Boolean(data.rtk.base_linked),
+    };
+    touched = true;
+  }
+
+  // Extract battery data
+  if (data.battery && typeof data.battery === 'object') {
+    envelope.battery = {
+      voltage: typeof data.battery.voltage === 'number' ? data.battery.voltage : 0,
+      current: typeof data.battery.current === 'number' ? data.battery.current : 0,
+      percentage: typeof data.battery.percentage === 'number' ? data.battery.percentage : 0,
+    };
+    touched = true;
+  }
+
+  // Extract mission data
+  if (data.mission && typeof data.mission === 'object') {
+    envelope.mission = {
+      total_wp: typeof data.mission.total_wp === 'number' ? data.mission.total_wp : 0,
+      current_wp: typeof data.mission.current_wp === 'number' ? data.mission.current_wp : 0,
+      status: typeof data.mission.status === 'string' ? data.mission.status : 'IDLE',
+      progress_pct: typeof data.mission.progress_pct === 'number' ? data.mission.progress_pct : 0,
+    };
+    touched = true;
+  }
+
   return touched ? (envelope as TelemetryEnvelope) : null;
 };
 
@@ -309,9 +402,21 @@ export interface RoverServices {
 
 export interface UseRoverROSResult {
   telemetry: RoverTelemetry;
+  roverPosition: { lat: number; lng: number; timestamp: number } | null;
   connectionState: ConnectionState;
   reconnect: () => void;
   services: RoverServices;
+  onMissionEvent: (callback: (event: MissionEventData) => void) => void;
+}
+
+export interface MissionEventData {
+  timestamp: string;
+  message: string;
+  lat?: number | null;
+  lng?: number | null;
+  waypointId?: number | null;
+  status?: string | null;
+  servoAction?: string | null;
 }
 
 export function useRoverROS(): UseRoverROSResult {
@@ -323,6 +428,7 @@ export function useRoverROS(): UseRoverROSResult {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffRef = useRef<number>(INITIAL_BACKOFF_MS);
   const connectDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const missionEventCallbackRef = useRef<((event: MissionEventData) => void) | null>(null);
   const mutableRef = useRef<MutableTelemetry>({
     telemetry: createDefaultTelemetry(),
     lastEnvelopeTs: null,
@@ -353,6 +459,9 @@ export function useRoverROS(): UseRoverROSResult {
     }
     if (envelope.servo) {
       next.servo = { ...next.servo, ...envelope.servo };
+    }
+    if (envelope.network) {
+      next.network = { ...next.network, ...envelope.network };
     }
 
     next.lastMessageTs = envelope.timestamp ?? Date.now();
@@ -430,6 +539,13 @@ export function useRoverROS(): UseRoverROSResult {
 
   const handleBridgeTelemetry = useCallback(
     (payload: any) => {
+      console.log('[RTK DEBUG] telemetry event received:', payload);
+      if (payload.rtk) {
+        console.log('[RTK DEBUG] telemetry.rtk:', payload.rtk);
+      }
+      if (payload.global) {
+        console.log('[RTK DEBUG] telemetry.global:', payload.global);
+      }
       const envelope = toTelemetryEnvelopeFromBridge(payload);
       if (envelope) {
         applyEnvelope(envelope);
@@ -440,7 +556,33 @@ export function useRoverROS(): UseRoverROSResult {
 
   const handleRoverData = useCallback(
     (payload: any) => {
+      console.log('[RTK DEBUG] rover_data event received:', payload);
+      
+      // Log RTK-specific data from server
+      console.log('[RTK DEBUG] RTK Data from Server:', {
+        fix_type: payload.fix_type,
+        rtk_status: payload.rtk_status,
+        rtk_fix_type: payload.rtk_fix_type,
+        rtk_base_linked: payload.rtk_base_linked,
+        rtk_baseline_age: payload.rtk_baseline_age,
+        satellites_visible: payload.satellites_visible,
+        raw_payload_rtk: payload.rtk,
+      });
+      
+      if (payload.rtk_status) {
+        console.log('[RTK DEBUG] rover_data.rtk_status:', payload.rtk_status);
+      }
       const envelope = toTelemetryEnvelopeFromRoverData(payload);
+      
+      // Log what gets sent to RTK panel
+      if (envelope?.rtk) {
+        console.log('[RTK DEBUG] Data sent to RTK Panel:', {
+          fix_type: envelope.rtk.fix_type,
+          base_linked: envelope.rtk.base_linked,
+          baseline_age: envelope.rtk.baseline_age,
+        });
+      }
+      
       if (envelope) {
         applyEnvelope(envelope);
       }
@@ -530,6 +672,14 @@ export function useRoverROS(): UseRoverROSResult {
 
         socket.on('telemetry', handleBridgeTelemetry);
         socket.on('rover_data', handleRoverData);
+        
+        // Listen for mission events from backend
+        socket.on('mission_event', (data: MissionEventData) => {
+          console.log('Received mission_event:', data);
+          if (missionEventCallbackRef.current) {
+            missionEventCallbackRef.current(data);
+          }
+        });
 
         socket.connect();
 
@@ -642,11 +792,46 @@ const services = useMemo<RoverServices>(
   [pushStatePatch],
 );
 
+  const onMissionEvent = useCallback((callback: (event: MissionEventData) => void) => {
+    missionEventCallbackRef.current = callback;
+  }, []);
+
+  // Memoize rover position to prevent unnecessary re-renders
+  const roverPosition = useMemo(() => {
+    const lat = telemetrySnapshot.global?.lat ?? 0;
+    const lng = telemetrySnapshot.global?.lon ?? 0;
+    
+    // Skip {0, 0} default position to prevent initial map jump
+    if (lat === 0 && lng === 0) {
+      return null;
+    }
+    
+    const result = {
+      lat,
+      lng,
+      timestamp: telemetrySnapshot.lastMessageTs || Date.now(),
+    };
+    
+    // Log only when position actually changes (not on every memoization check)
+    console.log('[DATA FLOW] 🎯 roverPosition memoized:', {
+      lat: lat.toFixed(6),
+      lng: lng.toFixed(6),
+    });
+    
+    return result;
+  }, [
+    telemetrySnapshot.global?.lat,
+    telemetrySnapshot.global?.lon,
+    telemetrySnapshot.lastMessageTs,
+  ]);
+
   return {
     telemetry: telemetrySnapshot,
+    roverPosition, // ← Add this new property
     connectionState,
     reconnect,
     services,
+    onMissionEvent,
   };
 }
 

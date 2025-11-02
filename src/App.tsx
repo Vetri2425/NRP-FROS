@@ -12,10 +12,14 @@ import ServoControlTab from './components/ServoControl/ServoControlTab';
 import { MissionFileInfo, Waypoint, ViewMode, RoverData } from './types';
 import { usePersistentState } from './hooks/usePersistentState';
 import { useMissionLogs } from './hooks/useMissionLogs';
-import { calculateDistancesForMission } from './utils/geo';
+import { useMissionHistory } from './hooks/useMissionHistory';
+import { calculateDistancesForMission, calculateDistance } from './utils/geo';
 import { toQGCWPL110 } from './utils/missionParser';
+import { sanitizeWaypointsForUpload } from './utils/waypointValidator';
 import { RoverTelemetry } from './types/ros';
 import { ConnectionState } from './hooks/useRoverROS';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 // The useTelemetry hook is no longer needed as useRoverROS provides comprehensive telemetry
 // import { useTelemetry } from './hooks/useTelemetry';
 
@@ -34,7 +38,11 @@ const mapFixTypeToLabel = (fixType: number): string => {
   }
 };
 
-const toRoverData = (telemetry: RoverTelemetry, connectionState: ConnectionState): RoverData => {
+const toRoverData = (
+  telemetry: RoverTelemetry, 
+  connectionState: ConnectionState, 
+  missionWaypoints: Waypoint[] = []
+): RoverData => {
   const isConnected = connectionState === 'connected';
   const position =
     Number.isFinite(telemetry.global.lat) && Number.isFinite(telemetry.global.lon)
@@ -44,6 +52,28 @@ const toRoverData = (telemetry: RoverTelemetry, connectionState: ConnectionState
   const currentWp = telemetry.mission.current_wp ?? 0;
   const completedWaypointIds =
     currentWp > 1 ? Array.from({ length: currentWp - 1 }, (_, idx) => idx + 1) : [];
+
+  // Calculate distance to next waypoint
+  let distanceToNext = 0;
+  if (position && currentWp > 0 && currentWp <= missionWaypoints.length) {
+    const nextWaypoint = missionWaypoints[currentWp - 1]; // currentWp is 1-indexed
+    if (nextWaypoint) {
+      const distanceMeters = calculateDistance(position, { lat: nextWaypoint.lat, lng: nextWaypoint.lng });
+      distanceToNext = distanceMeters * 3.28084; // Convert meters to feet
+    }
+  }
+
+  // 🔍 DEBUG: Log RTK transformation
+  const rtkStatus = mapFixTypeToLabel(telemetry.rtk.fix_type);
+  console.log('[APP.TSX toRoverData] RTK Data:', {
+    'fix_type (raw)': telemetry.rtk.fix_type,
+    'rtk_status (mapped)': rtkStatus,
+    'satellites_visible': telemetry.global.satellites_visible,
+    'baseline_age': telemetry.rtk.baseline_age,
+    'base_linked': telemetry.rtk.base_linked,
+    'position': position,
+    'connectionState': connectionState
+  });
 
   return {
     connected: isConnected,
@@ -56,11 +86,11 @@ const toRoverData = (telemetry: RoverTelemetry, connectionState: ConnectionState
     relative_altitude: telemetry.global.alt_rel,
     heading: 0,
     groundspeed: telemetry.global.vel,
-    rtk_status: mapFixTypeToLabel(telemetry.rtk.fix_type),
+    rtk_status: rtkStatus,
     fix_type: telemetry.rtk.fix_type,
     satellites_visible: telemetry.global.satellites_visible,
-    hrms: '0.000',
-    vrms: '0.000',
+    hrms: 0.000, // TODO: Add HRMS to telemetry
+    vrms: 0.000, // TODO: Add VRMS to telemetry
     battery: telemetry.battery.percentage,
     voltage: telemetry.battery.voltage,
     current: telemetry.battery.current,
@@ -68,7 +98,7 @@ const toRoverData = (telemetry: RoverTelemetry, connectionState: ConnectionState
     drop_rate: undefined,
     rc_connected: true,
     signal_strength: isConnected ? 'Good' : 'No Link',
-    imu_status: 'UNKNOWN',
+    imu_status: 'ALIGNED', // TODO: Add IMU status to telemetry
     mission_progress: {
       current: telemetry.mission.current_wp,
       total: telemetry.mission.total_wp,
@@ -79,14 +109,14 @@ const toRoverData = (telemetry: RoverTelemetry, connectionState: ConnectionState
         ? telemetry.mission.current_wp - 1
         : null,
     completedWaypointIds,
-    distanceToNext: 0,
+    distanceToNext,
     lastUpdate: telemetry.lastMessageTs ?? Date.now(),
     telemetryAgeMs: telemetry.lastMessageTs ? Date.now() - telemetry.lastMessageTs : undefined,
   };
 };
 
 const AppContent: React.FC = () => {
-  const { telemetry, connectionState, services } = useRover();
+  const { telemetry, connectionState, services, onMissionEvent } = useRover();
 
   const [viewMode, setViewMode] = usePersistentState<ViewMode>('app:viewMode', 'dashboard');
   const [missionWaypoints, setMissionWaypoints] = usePersistentState<Waypoint[]>(
@@ -111,7 +141,40 @@ const AppContent: React.FC = () => {
     missionLogs,
     getActiveLogEntries,
     clearLogs,
+    addLogEntry,
   } = useMissionLogs();
+
+  // When cleared, suppress live report metrics (distance, marked point, next point)
+  const [isLiveReportCleared, setIsLiveReportCleared] = useState(false);
+
+  // Mission history for undo/redo
+  const {
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    pushSnapshot,
+    clearHistory,
+    getHistorySize
+  } = useMissionHistory(20);
+
+  // Subscribe to mission events from backend via socket
+  useEffect(() => {
+    onMissionEvent((event) => {
+      // Convert backend mission event to log entry format
+      addLogEntry({
+        event: event.message,
+        lat: event.lat ?? null,
+        lng: event.lng ?? null,
+        waypointId: event.waypointId ?? null,
+        status: event.status ?? null,
+        servoAction: event.servoAction ?? null,
+        timestamp: event.timestamp,
+      });
+      // New live mission activity should un-clear the report automatically
+      setIsLiveReportCleared(false);
+    });
+  }, [onMissionEvent, addLogEntry]);
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullScreen(Boolean(document.fullscreenElement));
@@ -119,11 +182,42 @@ const AppContent: React.FC = () => {
     return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
   }, []);
 
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Z or Cmd+Z for undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+      // Ctrl+Shift+Z or Cmd+Shift+Z for redo
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
+        e.preventDefault();
+        handleRedo();
+      }
+      // Ctrl+Y or Cmd+Y for redo (alternative)
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canUndo, canRedo]); // Re-bind when undo/redo availability changes
+
+  // Create snapshot when mission waypoints change
+  useEffect(() => {
+    if (missionWaypoints.length > 0) {
+      pushSnapshot(missionWaypoints, missionFileInfo);
+    }
+  }, [missionWaypoints, missionFileInfo, pushSnapshot]);
+
   const isConnectedToRover = connectionState === 'connected';
 
   const uiRoverData: RoverData = useMemo(
-    () => toRoverData(telemetry, connectionState),
-    [telemetry, connectionState],
+    () => toRoverData(telemetry, connectionState, missionWaypoints),
+    [telemetry, connectionState, missionWaypoints],
   );
 
   const handleToggleFullScreen = () => {
@@ -165,7 +259,38 @@ const AppContent: React.FC = () => {
     setCurrentMissionFileName(null);
     setMissionFileInfo(null);
     setSelectedWaypointIds([]);
-  }, [setMissionWaypoints, setCurrentMissionFileName, setMissionFileInfo, setSelectedWaypointIds]);
+    clearHistory(); // Clear undo/redo history when mission is cleared
+  }, [setMissionWaypoints, setCurrentMissionFileName, setMissionFileInfo, setSelectedWaypointIds, clearHistory]);
+
+  // Undo handler
+  const handleUndo = useCallback(() => {
+    if (!canUndo) {
+      console.log('No more actions to undo');
+      return;
+    }
+
+    const snapshot = undo();
+    if (snapshot) {
+      setMissionWaypoints(snapshot.waypoints);
+      setMissionFileInfo(snapshot.fileInfo);
+      console.log(`Undone to snapshot from ${new Date(snapshot.timestamp).toLocaleTimeString()}`);
+    }
+  }, [canUndo, undo, setMissionWaypoints, setMissionFileInfo]);
+
+  // Redo handler
+  const handleRedo = useCallback(() => {
+    if (!canRedo) {
+      console.log('No more actions to redo');
+      return;
+    }
+
+    const snapshot = redo();
+    if (snapshot) {
+      setMissionWaypoints(snapshot.waypoints);
+      setMissionFileInfo(snapshot.fileInfo);
+      console.log(`Redone to snapshot from ${new Date(snapshot.timestamp).toLocaleTimeString()}`);
+    }
+  }, [canRedo, redo, setMissionWaypoints, setMissionFileInfo]);
 
   const handleWriteToRover = useCallback(async (): Promise<boolean> => {
     if (missionWaypoints.length === 0) {
@@ -173,7 +298,10 @@ const AppContent: React.FC = () => {
       return false;
     }
     try {
-      const response = await services.uploadMission(missionWaypoints);
+      // Sanitize waypoints before upload (e.g., convert negative altitudes to positive)
+      const sanitizedWaypoints = sanitizeWaypointsForUpload(missionWaypoints);
+      
+      const response = await services.uploadMission(sanitizedWaypoints);
       if (response.success) {
         alert(`Mission upload requested (${missionWaypoints.length} waypoints).`);
         return true;
@@ -329,22 +457,31 @@ const AppContent: React.FC = () => {
     onNewMissionDrawn: handleNewMissionDrawn,
     isConnectedToRover,
     onUpdateWaypointPosition: handleUpdateWaypointPosition,
+    telemetry: {
+      speed: telemetry.global.vel,
+      battery: telemetry.battery.percentage,
+      signalStrength: isConnectedToRover ? 85 : 0, // Mock signal strength based on connection
+      altitude: telemetry.global.alt_rel,
+      satellites: telemetry.global.satellites_visible,
+    },
   };
 
   const renderMainContent = () => {
     switch (viewMode) {
       case 'servo':
         return (
-          <main className="flex-1 flex p-4 overflow-hidden">
+          <main className="flex-1 flex p-3 overflow-hidden min-h-0">
             <ServoControlTab />
           </main>
         );
       case 'planning':
         return (
-          <main className="flex-1 flex p-4 gap-4 overflow-hidden relative">
-            <div className="flex-1 flex flex-col gap-4">
-              <MapView {...commonMapProps} />
-              <div className="flex-[0_0_240px] overflow-hidden">
+          <main className="flex-1 flex p-3 gap-3 overflow-hidden min-h-0">
+            <div className="flex-1 flex flex-col gap-3 min-h-0">
+              <div className="flex-1 min-h-0">
+                <MapView {...commonMapProps} />
+              </div>
+              <div className="h-48 overflow-hidden">
                 <QGCWaypointTable
                   waypoints={missionWaypoints}
                   onDelete={handleDeleteWaypoint}
@@ -355,7 +492,7 @@ const AppContent: React.FC = () => {
                 />
               </div>
             </div>
-            <aside className="w-80 max-w-xs grid grid-rows-2 gap-4">
+            <aside className="w-72 flex flex-col gap-3 min-h-0">
               <PlanControls
                 missionWaypoints={missionWaypoints}
                 onUpload={handleMissionUpload}
@@ -378,24 +515,32 @@ const AppContent: React.FC = () => {
             liveRoverData={uiRoverData}
             missionName={currentMissionFileName}
             isConnected={isConnectedToRover}
+            isCleared={isLiveReportCleared}
+            onClearLogs={() => {
+              if (!missionLogs.length) return;
+              const ok = window.confirm('This will clear the current mission logs. Continue?');
+              if (ok) clearLogs();
+              // Also clear the live report metrics on the page
+              setIsLiveReportCleared(true);
+            }}
           />
         );
       case 'setup':
         return (
-          <main className="flex-1 flex p-4 overflow-hidden">
+          <main className="flex-1 flex p-3 overflow-hidden min-h-0">
             <SetupTab />
           </main>
         );
       case 'dashboard':
       default:
         return (
-          <main className="flex-1 flex p-4 gap-4 overflow-hidden">
-            <LeftSidebar
-              missionLogs={missionLogs}
-            />
-            <div className="flex-1 flex flex-col gap-4">
-              <MapView {...commonMapProps} />
-              <div className="flex-[0_0_240px] overflow-hidden">
+          <main className="flex-1 flex p-3 gap-3 overflow-hidden min-h-0">
+            <LeftSidebar />
+            <div className="flex-1 flex flex-col gap-3 min-h-0">
+              <div className="flex-1 min-h-0">
+                <MapView {...commonMapProps} />
+              </div>
+              <div className="h-44 overflow-hidden">
                 <MissionLogs
                   logEntries={getActiveLogEntries()}
                   onDownload={() => {
@@ -461,7 +606,7 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="text-white min-h-screen flex flex-col font-sans bg-slate-800 transition-all duration-300">
+    <div className="text-white w-screen h-screen flex flex-col font-sans bg-slate-800 overflow-hidden">
       <Header
         viewMode={viewMode}
         setViewMode={setViewMode}
@@ -476,6 +621,18 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => (
   <RoverProvider>
     <AppContent />
+    <ToastContainer
+      position="top-right"
+      autoClose={3000}
+      hideProgressBar={false}
+      newestOnTop={true}
+      closeOnClick
+      rtl={false}
+      pauseOnFocusLoss
+      draggable
+      pauseOnHover
+      theme="dark"
+    />
   </RoverProvider>
 );
 

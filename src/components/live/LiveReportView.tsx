@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Waypoint, RoverData } from '../../types';
+import { useRover } from '../../context/RoverContext';
 import MapView from '../MapView';
 import WaypointStatusList from './WaypointStatusList';
 import LiveControls from './LiveControls';
@@ -11,6 +12,8 @@ type LiveReportViewProps = {
   liveRoverData: RoverData;
   missionName: string | null;
   isConnected: boolean;
+  onClearLogs?: () => void;
+  isCleared?: boolean;
 };
 
 const LiveReportView: React.FC<LiveReportViewProps> = ({
@@ -18,45 +21,71 @@ const LiveReportView: React.FC<LiveReportViewProps> = ({
   liveRoverData,
   missionName,
   isConnected,
+  onClearLogs,
+  isCleared = false,
 }) => {
+  const { telemetry } = useRover();
   const activeWaypointId =
-    liveRoverData.activeWaypointIndex !== null && liveRoverData.activeWaypointIndex !== undefined
+    !isCleared && liveRoverData.activeWaypointIndex !== null && liveRoverData.activeWaypointIndex !== undefined
       ? liveRoverData.activeWaypointIndex + 1
       : null;
 
-  const currentWaypointSeq = liveRoverData.mission_progress?.current || liveRoverData.activeWaypointIndex || 0;
+  // Use mission_progress data if available, otherwise fall back to activeWaypointIndex
+  const currentWaypointSeq = isCleared
+    ? 0
+    : (liveRoverData.mission_progress?.current || 
+      liveRoverData.current_waypoint_id || 
+      (liveRoverData.activeWaypointIndex !== null ? liveRoverData.activeWaypointIndex + 1 : 0));
+
+  // Build a display-safe rover data when cleared (zero distance, no completed, no active)
+  const displayRoverData: RoverData = isCleared
+    ? {
+        ...liveRoverData,
+        completedWaypointIds: [],
+        activeWaypointIndex: null,
+        distanceToNext: 0,
+      }
+    : liveRoverData;
 
   return (
-    <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
+    <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden min-h-0">
       {/* Top section with 3 panels */}
-      <div className="flex-1 flex gap-4 overflow-hidden">
+      <div className="flex-1 flex gap-3 overflow-hidden min-h-0">
         {/* Left Panel: Waypoint List */}
-        <aside className="w-[320px] flex-shrink-0 bg-[#111827] rounded-lg overflow-hidden">
+        <aside className="w-[280px] flex-shrink-0 bg-[#111827] rounded-lg overflow-hidden">
           <WaypointStatusList
             waypoints={missionWaypoints}
             activeWaypointId={activeWaypointId}
-            completedWaypointIds={liveRoverData.completedWaypointIds}
+            completedWaypointIds={isCleared ? [] : liveRoverData.completedWaypointIds}
+            onClearLogs={onClearLogs}
           />
         </aside>
 
         {/* Center Panel: Map View */}
-        <main className="flex-1 flex flex-col">
+        <main className="flex-1 flex flex-col min-h-0">
           <MapView
             missionWaypoints={missionWaypoints}
             onMapClick={() => {}}
             roverPosition={liveRoverData.position}
-            activeWaypointIndex={liveRoverData.activeWaypointIndex}
+            activeWaypointIndex={isCleared ? null : liveRoverData.activeWaypointIndex}
             heading={liveRoverData.heading}
             viewMode="live"
             isFullScreen={false} // Full screen is handled by the browser
             onNewMissionDrawn={() => {}}
             isConnectedToRover={false} // In live view, we just display data
             onUpdateWaypointPosition={() => {}}
+            telemetry={{
+              speed: telemetry.global.vel,
+              battery: telemetry.battery.percentage,
+              signalStrength: isConnected ? 85 : 0, // Mock signal strength based on connection
+              altitude: telemetry.global.alt_rel,
+              satellites: telemetry.global.satellites_visible,
+            }}
           />
         </main>
 
         {/* Right Panel: Controls */}
-        <aside className="w-[240px] flex-shrink-0">
+        <aside className="w-[220px] flex-shrink-0">
           <LiveControls 
             isConnected={isConnected}
             currentWaypoint={currentWaypointSeq}
@@ -64,12 +93,12 @@ const LiveReportView: React.FC<LiveReportViewProps> = ({
         </aside>
       </div>
 
-      {/* Bottom Panel: Status Bar */}
-      <footer className="h-[180px] flex-shrink-0">
+  {/* Bottom Panel: Status Bar */}
+      <footer className="h-40 flex-shrink-0">
         <LiveStatusbar 
             missionName={missionName}
             waypoints={missionWaypoints}
-            liveRoverData={liveRoverData}
+            liveRoverData={displayRoverData}
         />
       </footer>
     </div>

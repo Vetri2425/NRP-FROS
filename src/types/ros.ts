@@ -32,6 +32,15 @@ export interface TelemetryMission {
   progress_pct: number;
 }
 
+export interface NetworkData {
+  connection_type: 'wifi' | 'ethernet' | 'none';
+  wifi_signal_strength: number;
+  wifi_rssi: number;
+  interface: string;
+  wifi_connected: boolean;
+  lora_connected: boolean;
+}
+
 export interface ServoStatus {
   servo_id: number;
   active: boolean;
@@ -62,6 +71,7 @@ export interface TelemetryEnvelope {
   rtk?: TelemetryRtk;
   mission?: TelemetryMission;
   servo?: ServoStatus;
+  network?: NetworkData;
   timestamp?: number;
 }
 
@@ -78,5 +88,6 @@ export interface RoverTelemetry {
   rtk: TelemetryRtk;
   mission: TelemetryMission;
   servo: ServoStatus;
+  network: NetworkData;
   lastMessageTs: number | null;
 }

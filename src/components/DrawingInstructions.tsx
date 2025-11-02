@@ -1,6 +1,6 @@
 import React from 'react';
 
-type Tool = 'measure' | 'profile' | 'line' | 'rectangle' | 'circle' | 'polygon' | 'hexagon' | null;
+type Tool = 'measure' | 'profile' | 'line' | 'rectangle' | 'circle' | 'polygon' | 'hexagon' | 'geofence' | null;
 
 type DrawingInstructionsProps = {
   activeTool: Tool;
@@ -19,6 +19,9 @@ const DrawingInstructions: React.FC<DrawingInstructionsProps> = ({ activeTool })
     case 'circle':
     case 'hexagon':
       instruction = 'Click and drag on the map to draw the shape.';
+      break;
+    case 'geofence':
+      instruction = 'Click and drag to create a geofence zone. Name it after creation.';
       break;
     default:
       return null;

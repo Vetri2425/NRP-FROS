@@ -2,17 +2,20 @@
 import React, { useEffect, useRef } from 'react';
 import { Waypoint } from '../../types';
 import { CheckCircleIcon } from '../icons/CheckCircleIcon';
+import { TrashIcon } from '../icons/TrashIcon';
 
 type WaypointStatusListProps = {
   waypoints: Waypoint[];
   activeWaypointId: number | null;
   completedWaypointIds: number[];
+  onClearLogs?: () => void;
 };
 
 const WaypointStatusList: React.FC<WaypointStatusListProps> = ({
   waypoints,
   activeWaypointId,
   completedWaypointIds,
+  onClearLogs,
 }) => {
   const activeItemRef = useRef<HTMLTableRowElement>(null);
 
@@ -27,7 +30,7 @@ const WaypointStatusList: React.FC<WaypointStatusListProps> = ({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="bg-gray-700 p-2 flex-shrink-0">
+      <div className="bg-gray-700 p-2 flex-shrink-0 relative">
         <table className="w-full text-left text-xs">
           <thead>
             <tr className="text-gray-400">
@@ -37,6 +40,17 @@ const WaypointStatusList: React.FC<WaypointStatusListProps> = ({
             </tr>
           </thead>
         </table>
+        {onClearLogs && (
+          <button
+            type="button"
+            onClick={onClearLogs}
+            title="Clear mission logs"
+            className="absolute right-2 top-1 inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-red-600/80 hover:bg-red-600 text-white transition-colors"
+          >
+            <TrashIcon className="w-3.5 h-3.5" />
+            Clear Logs
+          </button>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto">
         <table className="w-full text-left text-sm">

@@ -47,14 +47,7 @@ const LogManager: React.FC<Props> = ({ logs }) => {
                 >
                   Preview
                 </button>
-                <button 
-                    onClick={() => exportLogsToCSV(log.entries)} 
-                    className="px-2 py-1 text-xs bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
-                    disabled={log.entries.length === 0}
-                    aria-label={`Download log for ${log.name}`}
-                >
-                  Download
-                </button>
+                {/* Download button removed as requested */}
               </div>
             </li>
           ))}
