@@ -18,6 +18,8 @@ import { generateCircleWaypoints, generateRegularPolygonWaypoints, calculateDist
 import DrawingInstructions from './DrawingInstructions';
 import { useFrameTicker } from '../hooks/useFrameTicker';
 import { useRover } from '../context/RoverContext';
+import useMapTelemetry from '../hooks/useMapTelemetry';
+import type { MapLayer } from '../types/map';
 
 
 declare var L: any;
@@ -136,6 +138,8 @@ const MapView: React.FC<MapViewProps> = ({
   const missionLayerRef = useRef<any>(null);
   const missionMarkersRef = useRef<any[]>([]);
   const roverMarkerRef = useRef<any>(null);
+  const vehicleLayerGroupRef = useRef<any>(null);
+  const trailLayerGroupRef = useRef<any>(null);
   // 3D rover resources removed; using lightweight SVG icon instead
   const traveledPathLayerRef = useRef<any>(null);
   const headingLineRef = useRef<any>(null);
@@ -148,7 +152,10 @@ const MapView: React.FC<MapViewProps> = ({
   const lastSampleRef = useRef<{ t: number, lat: number, lng: number, heading: number } | null>(null);
   const lastIconUpdateRef = useRef<number>(0);
   const lastPositionUpdateRef = useRef<number>(0);
-  const frameNow = useFrameTicker();
+  useFrameTicker((timestamp) => {
+    // RAF ticker runs at 60 FPS for smooth animations
+    // No need to log every frame - use only for performance-critical updates
+  });
   
   // Throttle settings for optimized real-time accuracy
   const POSITION_UPDATE_THROTTLE_MS = 50; // Throttle position updates to 50ms
@@ -178,7 +185,7 @@ const MapView: React.FC<MapViewProps> = ({
   const [selectedWaypointId, setSelectedWaypointId] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, waypointId: number } | null>(null);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
-  const [trailHistory, setTrailHistory] = useState<Array<{ lat: number, lng: number, timestamp: number }>>([]);
+  // Trail is now managed internally via useMapTelemetry to avoid React re-renders
   const [geofenceAlerts, setGeofenceAlerts] = useState<Array<{ id: string, message: string, level: 'info' | 'warning' | 'critical', timestamp: number }>>([]);
   const [showGeofencePanel, setShowGeofencePanel] = useState(false);
   const [editingGeofence, setEditingGeofence] = useState<string | null>(null);
@@ -200,20 +207,22 @@ const MapView: React.FC<MapViewProps> = ({
   const [currentZoom, setCurrentZoom] = useState(13);
   const lastBoundsUpdateRef = useRef<number>(0);
 
-  // Update rover marker position when roverPosition changes
-  useEffect(() => {
-    if (!roverMarkerRef.current || !roverPosition) return;
-    const { lat, lng } = roverPosition;
-    // Direct Leaflet API call - instant update!
-    roverMarkerRef.current.setLatLng([lat, lng]);
-    // Optional: Log with timestamp for debugging
-    console.log('[MapView] Rover position updated:', {
-      lat,
-      lng,
-      // Normalize to ISO string for consistent logging
-      timestamp: new Date(roverPosition.timestamp ?? Date.now()).toISOString(),
-    });
-  }, [roverPosition]);
+  // Layer visibility management
+  const [layers, setLayers] = useState<MapLayer[]>([
+    { name: 'Vehicle', type: 'vehicle', visible: true },
+    { name: 'Trail', type: 'trail', visible: true },
+    { name: 'Geofence', type: 'geofence', visible: true },
+    { name: 'Waypoints', type: 'waypoints', visible: true },
+  ]);
+
+  // Vehicle and trail updates handled via useMapTelemetry (non-react updates)
+  useMapTelemetry({
+    mapRef: mapRef as any,
+    vehicleLayerRef: vehicleLayerGroupRef as any,
+    trailLayerRef: trailLayerGroupRef as any,
+    throttleMs: 250,
+    maxTrailPoints: 500,
+  });
 
   const invalidateAndFitBounds = useCallback(() => {
     if (!mapRef.current) return;
@@ -622,7 +631,7 @@ const MapView: React.FC<MapViewProps> = ({
     if (headingLineRef.current) headingLineRef.current.remove();
     headingLineRef.current = null;
 
-    if (visibleWaypoints.length > 0) {
+  if (visibleWaypoints.length > 0 && layers.find(l => l.type === 'waypoints')?.visible) {
       // Use visible waypoints for performance
       const latLngs = visibleWaypoints.map((wp) => [wp.lat, wp.lng]);
       const isDraggable = viewMode === 'planning';
@@ -668,14 +677,16 @@ const MapView: React.FC<MapViewProps> = ({
       
       missionMarkersRef.current = markers;
       
-      // Only draw path if we have reasonable number of waypoints
-      if (visibleWaypoints.length <= 100) {
-        L.polyline(latLngs, { color: 'orange', weight: 2 }).addTo(missionLayerRef.current);
-      } else {
-        // For large datasets, draw simplified path
-        const simplified = visibleWaypoints.filter((_, i) => i % Math.ceil(visibleWaypoints.length / 50) === 0);
-        const simplifiedLatLngs = simplified.map(wp => [wp.lat, wp.lng]);
-        L.polyline(simplifiedLatLngs, { color: 'orange', weight: 2, opacity: 0.7 }).addTo(missionLayerRef.current);
+      if (layers.find(l => l.type === 'waypoints')?.visible) {
+        // Only draw path if we have reasonable number of waypoints
+        if (visibleWaypoints.length <= 100) {
+          L.polyline(latLngs, { color: 'orange', weight: 2 }).addTo(missionLayerRef.current);
+        } else {
+          // For large datasets, draw simplified path
+          const simplified = visibleWaypoints.filter((_, i) => i % Math.ceil(visibleWaypoints.length / 50) === 0);
+          const simplifiedLatLngs = simplified.map(wp => [wp.lat, wp.lng]);
+          L.polyline(simplifiedLatLngs, { color: 'orange', weight: 2, opacity: 0.7 }).addTo(missionLayerRef.current);
+        }
       }
       
       // Auto-fit only once for a given mission
@@ -691,7 +702,7 @@ const MapView: React.FC<MapViewProps> = ({
       console.warn(`Slow waypoint render: ${renderTime.toFixed(2)}ms for ${visibleWaypoints.length} waypoints`);
     }
     
-  }, [visibleWaypoints, viewMode, activeWaypointIndex, invalidateAndFitBounds, onUpdateWaypointPosition]);
+  }, [visibleWaypoints, viewMode, activeWaypointIndex, invalidateAndFitBounds, onUpdateWaypointPosition, layers]); // ✅ FIXED: Added layers to deps
 
   useEffect(() => {
     if (!mapRef.current || missionMarkersRef.current.length === 0) return;
@@ -704,150 +715,9 @@ const MapView: React.FC<MapViewProps> = ({
     });
   }, [activeWaypointIndex, pathWaypoints]);
 
-  // Rover position and rendering (blue diamond arrow icon)
-  useEffect(() => {
-    if (!mapRef.current) return;
-    
-    if (roverPosition) {
-      // Throttle position updates to improve performance and optimize real-time accuracy
-      const now = performance.now();
-      if (now - lastPositionUpdateRef.current < POSITION_UPDATE_THROTTLE_MS) {
-        return; // Skip update if throttle period hasn't elapsed
-      }
-      lastPositionUpdateRef.current = now;
-      // Create/update simple blue diamond rover icon with heading rotation
-      const iconHtml = renderToStaticMarkup(
-        <RoverIcon className="w-9 h-9 text-blue-500 drop-shadow-md" heading={heading || 0} />
-      );
-      const roverIcon = L.divIcon({
-        html: iconHtml,
-        className: 'bg-transparent border-0',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
-      });
-      
-      // Update or create rover marker
-      if (!roverMarkerRef.current) {
-        roverMarkerRef.current = L.marker([roverPosition.lat, roverPosition.lng], { 
-          icon: roverIcon, 
-          zIndexOffset: 1000 
-        }).addTo(mapRef.current);
-      } else {
-        roverMarkerRef.current.setLatLng([roverPosition.lat, roverPosition.lng]);
-        roverMarkerRef.current.setIcon(roverIcon);
-      }
-      
-      // Update sample tracking for interpolation
-      prevSampleRef.current = lastSampleRef.current;
-      lastSampleRef.current = { t: now, lat: roverPosition.lat, lng: roverPosition.lng, heading: heading || 0 };
-      
-    } else if (roverMarkerRef.current) {
-      // Clean up rover marker when no position
-      roverMarkerRef.current.remove();
-      roverMarkerRef.current = null;
-    }
-  }, [roverPosition, heading, telemetry]);
-
-  // Cleanup on unmount (marker only)
-  useEffect(() => {
-    return () => {
-      if (roverMarkerRef.current) {
-        roverMarkerRef.current.remove();
-        roverMarkerRef.current = null;
-      }
-    };
-  }, []);
-
-  // Animation frame: interpolate marker between samples for smooth motion
-  useEffect(() => {
-    if (!mapRef.current || !roverMarkerRef.current) return;
-    const a = prevSampleRef.current;
-    const b = lastSampleRef.current;
-    if (!b) return;
-
-    const now = performance.now();
-    let lat = b.lat, lng = b.lng, hdg = b.heading;
-
-    if (a) {
-      const dt = Math.max(0.0001, b.t - a.t);
-      const t = Math.max(0, Math.min(1, (now - a.t) / dt));
-      const lerp = (x, y, t) => x + (y - x) * t;
-      lat = lerp(a.lat, b.lat, t);
-      lng = lerp(a.lng, b.lng, t);
-
-      // Shortest-angle interpolation for heading
-      const d = ((((b.heading - a.heading) + 540) % 360) - 180);
-      hdg = a.heading + d * t;
-    }
-
-    roverMarkerRef.current.setLatLng([lat, lng]);
-
-    // Throttle icon updates to optimize performance
-    if (now - lastIconUpdateRef.current > ICON_UPDATE_THROTTLE_MS) {
-      // Update rover icon heading during interpolation
-      const iconHtml = renderToStaticMarkup(
-        <RoverIcon className="w-9 h-9 text-blue-500 drop-shadow-md" heading={hdg || 0} />
-      );
-      const roverIcon = L.divIcon({
-        html: iconHtml,
-        className: 'bg-transparent border-0',
-        iconSize: [36, 36],
-        iconAnchor: [18, 18]
-      });
-      roverMarkerRef.current.setIcon(roverIcon);
-      lastIconUpdateRef.current = now;
-    }
-  }, [frameNow]);
+  // Rover marker updates are handled inside useMapTelemetry
   
-  useEffect(() => {
-      if (!mapRef.current) return;
-      if (roverPosition) {
-          const now = Date.now();
-          
-          // Add current position to trail history
-          setTrailHistory(prev => {
-            const MAX_TRAIL_POINTS = 100;
-            const MAX_AGE_MS = 60000; // 1 minute
-            
-            // Filter out old points
-            const filtered = prev.filter(p => now - p.timestamp < MAX_AGE_MS);
-            
-            // Add new point if it's different from last
-            const lastPoint = filtered[filtered.length - 1];
-            if (!lastPoint || 
-                Math.abs(lastPoint.lat - roverPosition.lat) > 0.00001 || 
-                Math.abs(lastPoint.lng - roverPosition.lng) > 0.00001) {
-              filtered.push({ lat: roverPosition.lat, lng: roverPosition.lng, timestamp: now });
-            }
-            
-            // Keep only last MAX_TRAIL_POINTS
-            return filtered.slice(-MAX_TRAIL_POINTS);
-          });
-          
-          // Update trail visualization
-          if (!traveledPathLayerRef.current) {
-            traveledPathLayerRef.current = L.featureGroup().addTo(mapRef.current);
-          }
-          
-          traveledPathLayerRef.current.clearLayers();
-          
-          // Draw trail segments with fading opacity
-          if (trailHistory.length > 1) {
-            const segments = [];
-            for (let i = 1; i < trailHistory.length; i++) {
-              const age = now - trailHistory[i].timestamp;
-              const maxAge = 60000;
-              const opacity = Math.max(0.2, 1 - (age / maxAge));
-              
-              const segment = L.polyline(
-                [[trailHistory[i-1].lat, trailHistory[i-1].lng], [trailHistory[i].lat, trailHistory[i].lng]],
-                { color: '#0ea5e9', weight: 3, opacity: opacity }
-              );
-              segment.addTo(traveledPathLayerRef.current);
-            }
-          }
-      }
-  }, [roverPosition, trailHistory]);
+  // Trail is drawn by useMapTelemetry into its dedicated layer group
 
   // Enhanced Geofencing visualization and monitoring
   useEffect(() => {
@@ -949,7 +819,7 @@ const MapView: React.FC<MapViewProps> = ({
       // Clean old alerts (older than 2 minutes)
       setGeofenceAlerts(prev => prev.filter(alert => now - alert.timestamp < 120000));
     }
-  }, [geofenceZones, roverPosition, geofenceAlerts]);
+  }, [geofenceZones, roverPosition]); // ✅ FIXED: Removed geofenceAlerts from deps
 
   // Keep rover in view without constantly re-fitting bounds (prevents zoom/pan oscillation)
   useEffect(() => {
@@ -1410,7 +1280,6 @@ const MapView: React.FC<MapViewProps> = ({
                    <div><span className="text-gray-400">Position:</span> {roverPosition.lat.toFixed(6)}, {roverPosition.lng.toFixed(6)}</div>
                    <div><span className="text-gray-400">Heading:</span> {heading?.toFixed(1)}°</div>
                    <div><span className="text-gray-400">Connected:</span> <span className={isConnectedToRover ? 'text-green-400' : 'text-red-400'}>{isConnectedToRover ? 'Yes' : 'No'}</span></div>
-                   <div><span className="text-gray-400">Trail Points:</span> {trailHistory.length}</div>
                  </div>
                </div>
              )}
@@ -1476,6 +1345,43 @@ const MapView: React.FC<MapViewProps> = ({
            </div>
          </div>
        )}
+
+        {/* Layer visibility toggles */}
+        <div className="absolute top-2 left-2 z-[1200] bg-gray-800/80 text-white rounded-md border border-gray-700 p-2">
+          <div className="text-xs font-semibold mb-1">Layers</div>
+          <div className="space-y-1 text-xs">
+            {layers.map((layer) => (
+              <label key={layer.type} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={layer.visible}
+                  onChange={(e) => {
+                    const visible = e.target.checked;
+                    setLayers((prev) => prev.map((l) => (l.type === layer.type ? { ...l, visible } : l)));
+                    // Attach/detach layer groups from map
+                    if (layer.type === 'vehicle' && vehicleLayerGroupRef.current && mapRef.current) {
+                      if (visible) vehicleLayerGroupRef.current.addTo(mapRef.current);
+                      else mapRef.current.removeLayer(vehicleLayerGroupRef.current);
+                    }
+                    if (layer.type === 'trail' && trailLayerGroupRef.current && mapRef.current) {
+                      if (visible) trailLayerGroupRef.current.addTo(mapRef.current);
+                      else mapRef.current.removeLayer(trailLayerGroupRef.current);
+                    }
+                    if (layer.type === 'geofence' && geofenceLayerRef.current && mapRef.current) {
+                      if (visible) geofenceLayerRef.current.addTo(mapRef.current);
+                      else mapRef.current.removeLayer(geofenceLayerRef.current);
+                    }
+                    if (layer.type === 'waypoints' && missionLayerRef.current && mapRef.current) {
+                      if (visible) missionLayerRef.current.addTo(mapRef.current);
+                      else mapRef.current.removeLayer(missionLayerRef.current);
+                    }
+                  }}
+                />
+                <span>{layer.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
     </div>
   );
 };

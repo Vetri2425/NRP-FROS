@@ -1,22 +1,29 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
-// Simple animation-frame ticker. Re-renders the component at display refresh rate
-// and returns the current high-resolution timestamp (ms).
-export function useFrameTicker(): number {
-  const [now, setNow] = useState(() => performance.now());
+// Animation-frame ticker with callback. Runs at display refresh rate without triggering re-renders.
+export function useFrameTicker(callback: (timestamp: number) => void) {
+  const callbackRef = useRef(callback);
   const rafRef = useRef<number | null>(null);
 
+  // Keep the callback reference fresh without causing re-renders
   useEffect(() => {
-    const loop = () => {
-      setNow(performance.now());
+    callbackRef.current = callback;
+  }, [callback]);
+
+  useEffect(() => {
+    const loop = (time: number) => {
+      // Call the callback without state updates
+      callbackRef.current(time);
       rafRef.current = requestAnimationFrame(loop);
     };
-    rafRef.current = requestAnimationFrame(loop);
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
 
-  return now;
+    rafRef.current = requestAnimationFrame(loop);
+
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []); // Empty dependency array
 }
 

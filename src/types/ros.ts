@@ -81,6 +81,12 @@ export interface ServiceResponse {
   [key: string]: unknown;
 }
 
+export interface TelemetryAttitude {
+  yaw_deg: number; // Yaw in degrees
+  pitch_deg?: number; // Optional pitch in degrees
+  roll_deg?: number; // Optional roll in degrees
+}
+
 export interface RoverTelemetry {
   state: TelemetryState;
   global: TelemetryGlobal;
@@ -90,4 +96,5 @@ export interface RoverTelemetry {
   servo: ServoStatus;
   network: NetworkData;
   lastMessageTs: number | null;
+  attitude?: TelemetryAttitude; // Added attitude property
 }
