@@ -72,6 +72,7 @@ export interface TelemetryEnvelope {
   mission?: TelemetryMission;
   servo?: ServoStatus;
   network?: NetworkData;
+  attitude?: TelemetryAttitude;
   timestamp?: number;
 }
 

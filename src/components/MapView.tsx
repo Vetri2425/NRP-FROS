@@ -272,6 +272,17 @@ const MapView: React.FC<MapViewProps> = ({
           maxZoom: 26
       }).addTo(map);
       
+      // Initialize vehicle and trail layer groups for rover marker and path
+      if (!vehicleLayerGroupRef.current) {
+        vehicleLayerGroupRef.current = L.layerGroup().addTo(map);
+        console.log('🚗 [MapView] Vehicle layer group created and added to map');
+      }
+      
+      if (!trailLayerGroupRef.current) {
+        trailLayerGroupRef.current = L.layerGroup().addTo(map);
+        console.log('🛤️ [MapView] Trail layer group created and added to map');
+      }
+      
       // Add map event listeners for lazy loading
       map.on('moveend zoomend', () => {
         const now = performance.now();

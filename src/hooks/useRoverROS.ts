@@ -178,16 +178,18 @@ const toTelemetryEnvelopeFromRoverData = (data: any): TelemetryEnvelope | null =
     touched = true;
   }
 
-  // Global Position - with validation
+  // Global Position - with validation (accept numbers or numeric strings)
   if (data.position && typeof data.position === 'object') {
-    const { lat, lng } = data.position as { lat?: number; lng?: number };
-    const hasValidLat = typeof lat === 'number' && lat !== 0;
-    const hasValidLng = typeof lng === 'number' && lng !== 0;
+    let { lat, lng } = data.position as { lat?: number | string; lng?: number | string };
+    const latNum = typeof lat === 'string' ? parseFloat(lat) : lat;
+    const lngNum = typeof lng === 'string' ? parseFloat(lng) : lng;
+    const hasValidLat = typeof latNum === 'number' && isFinite(latNum) && latNum !== 0;
+    const hasValidLng = typeof lngNum === 'number' && isFinite(lngNum) && lngNum !== 0;
     
     if (hasValidLat && hasValidLng) {
       envelope.global = {
-        lat,
-        lon: lng,
+        lat: latNum,
+        lon: lngNum,
         alt_rel: typeof data.distanceToNext === 'number' ? data.distanceToNext : 0,
         vel: 0,
         satellites_visible: typeof data.satellites_visible === 'number' ? data.satellites_visible : 0,
@@ -195,7 +197,7 @@ const toTelemetryEnvelopeFromRoverData = (data: any): TelemetryEnvelope | null =
       touched = true;
       
       // Log position updates (less verbose)
-      console.log('[DATA FLOW] 🔵 Server → Position:', { lat: lat.toFixed(6), lng: lng.toFixed(6) });
+      console.log('[DATA FLOW] 🔵 Server → Position:', { lat: latNum.toFixed(6), lng: lngNum.toFixed(6) });
     }
   }
 
@@ -295,6 +297,13 @@ const toTelemetryEnvelopeFromRoverData = (data: any): TelemetryEnvelope | null =
       wifi_connected: Boolean(network.wifi_connected),
       lora_connected: Boolean(network.lora_connected),
     };
+    touched = true;
+  }
+
+  // Heading / attitude (accept server heading as degrees)
+  if (typeof data.heading === 'number' && isFinite(data.heading)) {
+    const yaw = ((data.heading % 360) + 360) % 360;
+    (envelope as any).attitude = { yaw_deg: yaw };
     touched = true;
   }
 
@@ -462,6 +471,9 @@ export function useRoverROS(): UseRoverROSResult {
     }
     if (envelope.network) {
       next.network = { ...next.network, ...envelope.network };
+    }
+    if ((envelope as any).attitude) {
+      next.attitude = { ...(next.attitude || {}), ...(envelope as any).attitude } as any;
     }
 
     next.lastMessageTs = envelope.timestamp ?? Date.now();

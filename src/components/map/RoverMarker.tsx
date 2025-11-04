@@ -40,6 +40,11 @@ export class RoverMarker extends (L as any).Marker {
     return this;
   }
 
+  // Back-compat alias for code that used leaflet-rotatedmarker API
+  setRotationAngle(deg: number): this {
+    return this.setHeading(deg);
+  }
+
   setAltitude(alt?: number): this {
     this._altitude = alt;
     return this._refreshIcon();

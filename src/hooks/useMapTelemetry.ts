@@ -4,6 +4,7 @@ declare var L: any;
 import { useRover } from '../context/RoverContext';
 import { createPathTrail } from '../utils/leaflet-helpers';
 import RoverMarker, { createRoverMarker } from '../components/map/RoverMarker';
+import { useSmoothedHeading } from './useSmoothedHeading';
 
 interface UseMapTelemetryParams {
   mapRef: React.MutableRefObject<any>;
@@ -21,6 +22,8 @@ export function useMapTelemetry({
   maxTrailPoints = 500,
 }: UseMapTelemetryParams) {
   const { telemetry, roverPosition } = useRover();
+  const targetHeading = telemetry.attitude?.yaw_deg ?? 0;
+  const smoothedHeading = useSmoothedHeading(targetHeading);
 
   const markerRef = useRef<RoverMarker | null>(null);
   const trailRef = useRef<any | null>(null);
@@ -40,34 +43,48 @@ export function useMapTelemetry({
     }
   }, [mapRef, vehicleLayerRef, trailLayerRef]);
 
-  // Initialize marker and trail
+  // Initialize marker and trail ONCE when position first becomes available
   useEffect(() => {
     const map = mapRef.current;
     const vehicleLayer = vehicleLayerRef.current;
     const trailLayer = trailLayerRef.current;
-    if (!map || !vehicleLayer || !trailLayer) return;
+    
+    if (!map || !vehicleLayer || !trailLayer) {
+      return;
+    }
 
+    // Only create marker if we don't have one AND position is available
     if (!markerRef.current && roverPosition) {
       const status: 'armed' | 'disarmed' | 'rtk' = telemetry.state?.armed
         ? 'armed'
         : (telemetry.rtk?.fix_type ?? 0) >= 4
           ? 'rtk'
           : 'disarmed';
+      
       markerRef.current = createRoverMarker(roverPosition.lat, roverPosition.lng, {
-        heading: 0,
+        heading: smoothedHeading,
         altitude: telemetry.global?.alt_rel ?? 0,
         status,
         zIndexOffset: 1000,
       }).addTo(vehicleLayer);
-      // Initial tooltip
-      const tt = `Lat: ${roverPosition.lat.toFixed(6)}\nLon: ${roverPosition.lng.toFixed(6)}\nAlt: ${(telemetry.global?.alt_rel ?? 0).toFixed(1)} m\nHeading: ${(0).toFixed(1)}°`;
+      
+      const tt = `Lat: ${roverPosition.lat.toFixed(6)}\nLon: ${roverPosition.lng.toFixed(6)}\nAlt: ${(telemetry.global?.alt_rel ?? 0).toFixed(1)} m\nHeading: ${(smoothedHeading).toFixed(1)}°`;
       markerRef.current.bindTooltip(tt, { permanent: false, direction: 'top', offset: [0, -10] });
+      
+      console.log('[useMapTelemetry] ✅ Rover marker created at:', { 
+        lat: roverPosition.lat, 
+        lng: roverPosition.lng,
+        status 
+      });
     }
 
+    // Only create trail if we don't have one
     if (!trailRef.current) {
       trailRef.current = createPathTrail([], '#0ea5e9').addTo(trailLayer);
+      console.log('[useMapTelemetry] ✅ Trail layer created');
     }
 
+    // Cleanup ONLY when component unmounts or layers change
     return () => {
       if (markerRef.current) {
         markerRef.current.remove();
@@ -78,61 +95,70 @@ export function useMapTelemetry({
         trailRef.current = null;
       }
     };
-  }, [mapRef, vehicleLayerRef, trailLayerRef, roverPosition, telemetry.state?.armed, telemetry.rtk?.fix_type, telemetry.global?.alt_rel]);
+  }, [mapRef, vehicleLayerRef, trailLayerRef, roverPosition]);
 
 
   // Throttled, non-blocking updates using requestAnimationFrame
   useEffect(() => {
     const pos = roverPosition;
-    if (!pos) return;
     const marker = markerRef.current;
     const trail = trailRef.current;
-    if (!marker || !trail) return;
+
+    // Bail early if no position yet
+    if (!pos) {
+      return;
+    }
+
+    // If marker/trail not ready yet, they'll be created in the init effect above
+    if (!marker || !trail) {
+      return;
+    }
 
     const now = performance.now();
-    if (now - lastEmitRef.current < throttleMs) return;
-    lastEmitRef.current = now;
+    const elapsed = now - lastEmitRef.current;
 
-    // Marker position
-    marker.setLatLng([pos.lat, pos.lng]);
+    const update = () => {
+      // Update marker position
+      marker.setLatLng(pos);
 
-    // Heading (ATTITUDE heading may come elsewhere; compute fallback using velocity vector if needed)
-    const heading = telemetry.attitude?.yaw_deg ?? undefined;
-    if (typeof heading === 'number' && isFinite(heading)) {
-      marker.setHeading(heading);
-    }
+      // Update heading (use RoverMarker API)
+      marker.setHeading(smoothedHeading);
 
-    // Update status/altitude visuals
-    const status: 'armed' | 'disarmed' | 'rtk' = telemetry.state?.armed
-      ? 'armed'
-      : (telemetry.rtk?.fix_type ?? 0) >= 4
-        ? 'rtk'
-        : 'disarmed';
-    marker.setStatus(status);
-    marker.setAltitude(telemetry.global?.alt_rel ?? 0);
+      // Update tooltip
+      const status: 'armed' | 'disarmed' | 'rtk' = telemetry.state?.armed
+        ? 'armed'
+        : (telemetry.rtk?.fix_type ?? 0) >= 4
+          ? 'rtk'
+          : 'disarmed';
+      const tt = `Lat: ${pos.lat.toFixed(6)}\nLon: ${pos.lng.toFixed(6)}\nAlt: ${(telemetry.global?.alt_rel ?? 0).toFixed(1)} m\nHeading: ${smoothedHeading.toFixed(1)}°`;
+      marker.setTooltipContent(tt);
+      marker.updateStatus(status);
 
-    // Trail history with culling
-    const last = pointsRef.current[pointsRef.current.length - 1];
-    const p: [number, number] = [pos.lat, pos.lng];
-    if (!last || Math.abs(last[0] - p[0]) > 1e-6 || Math.abs(last[1] - p[1]) > 1e-6) {
-      pointsRef.current.push(p);
-      if (pointsRef.current.length > maxTrailPoints) {
-        pointsRef.current.splice(0, pointsRef.current.length - maxTrailPoints);
+      // Add to trail if position changed
+      const lastPoint = pointsRef.current[pointsRef.current.length - 1];
+      if (!lastPoint || lastPoint[0] !== pos.lat || lastPoint[1] !== pos.lng) {
+        pointsRef.current.push([pos.lat, pos.lng]);
+        if (pointsRef.current.length > maxTrailPoints) {
+          pointsRef.current.shift();
+        }
+        trail.setLatLngs(pointsRef.current);
       }
-      trail.setLatLngs(pointsRef.current);
-    }
+    };
 
-    // Update tooltip
-    const currentAlt = telemetry.global?.alt_rel ?? 0;
-    const currentHdg = telemetry.attitude?.yaw_deg ?? 0;
-    const content = `Lat: ${pos.lat.toFixed(6)}\nLon: ${pos.lng.toFixed(6)}\nAlt: ${currentAlt.toFixed(1)} m\nHeading: ${currentHdg.toFixed(1)}°`;
-    const tooltip = marker.getTooltip?.();
-    if (tooltip) {
-      tooltip.setContent(content);
-    } else {
-      marker.bindTooltip?.(content, { permanent: false, direction: 'top', offset: [0, -10] });
+    if (elapsed > throttleMs) {
+      requestAnimationFrame(update);
+      lastEmitRef.current = now;
     }
-  }, [roverPosition, telemetry, throttleMs]);
+  }, [
+    roverPosition, 
+    telemetry.state?.armed, 
+    telemetry.rtk?.fix_type, 
+    telemetry.global?.alt_rel, 
+    throttleMs, 
+    maxTrailPoints,
+    smoothedHeading,
+    targetHeading,
+  ]);
 }
 
 export default useMapTelemetry;

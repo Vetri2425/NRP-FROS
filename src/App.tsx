@@ -49,6 +49,15 @@ const toRoverData = (
       ? { lat: telemetry.global.lat, lng: telemetry.global.lon }
       : null;
 
+  const heading = telemetry.attitude?.yaw_deg ?? 0; // Ensure heading is extracted from telemetry
+
+  // 🔍 DEBUG: Log heading data
+  console.log('[APP.TSX toRoverData] Heading Data:', {
+    'heading (raw)': telemetry.attitude?.yaw_deg,
+    'position': position,
+    'connectionState': connectionState,
+  });
+
   const currentWp = telemetry.mission.current_wp ?? 0;
   const completedWaypointIds =
     currentWp > 1 ? Array.from({ length: currentWp - 1 }, (_, idx) => idx + 1) : [];
@@ -84,7 +93,7 @@ const toRoverData = (
     longitude: position?.lng ?? undefined,
     altitude: telemetry.global.alt_rel,
     relative_altitude: telemetry.global.alt_rel,
-    heading: 0,
+    heading, // Pass heading data
     groundspeed: telemetry.global.vel,
     rtk_status: rtkStatus,
     fix_type: telemetry.rtk.fix_type,
@@ -449,9 +458,8 @@ const AppContent: React.FC = () => {
   const commonMapProps = {
     missionWaypoints,
     onMapClick: handleMapClick,
-    roverPosition: uiRoverData.position,
-    activeWaypointIndex: uiRoverData.activeWaypointIndex,
-    heading: uiRoverData.heading,
+    roverPosition: uiRoverData.position, // Ensure roverPosition is passed
+    heading: uiRoverData.heading, // Pass heading data to MapView
     viewMode,
     isFullScreen,
     onNewMissionDrawn: handleNewMissionDrawn,
@@ -518,10 +526,12 @@ const AppContent: React.FC = () => {
             isCleared={isLiveReportCleared}
             onClearLogs={() => {
               if (!missionLogs.length) return;
-              const ok = window.confirm('This will clear the current mission logs. Continue?');
-              if (ok) clearLogs();
-              // Also clear the live report metrics on the page
-              setIsLiveReportCleared(true);
+              const ok = window.confirm('This will clear the current mission logs and waypoints. Continue?');
+              if (ok) {
+                clearLogs();
+                setMissionWaypoints([]); // Clear all waypoints
+                setIsLiveReportCleared(true); // Clear live report metrics
+              }
             }}
           />
         );
