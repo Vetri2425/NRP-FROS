@@ -62,7 +62,7 @@ export default function ModeSelector({ selectedMode, setSelectedMode, JETSON_API
         onChange={(e) => setSelectedMode(e.target.value)}
         className="bg-slate-900 border border-slate-700 p-2 rounded w-full text-white"
       >
-        <option value="wpmark">Waypoint Mark</option>
+        <option value="wpmark">WP Mark (Active)</option>
         <option value="continuous">Continuous Line</option>
         <option value="interval">Interval Spray</option>
       </select>

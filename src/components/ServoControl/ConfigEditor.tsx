@@ -67,6 +67,21 @@ export default function ConfigEditor({ selectedMode, JETSON_API, status, onRefre
 
       {selectedMode === "wpmark" && (
         <>
+          {/* Mode Selection */}
+          <div className="mb-4">
+            <label className="block text-xs text-slate-400 mb-1">Operation Mode</label>
+            <select
+              onChange={(e) => handleChange("wp_mark.mode", e.target.value)}
+              className="bg-slate-900 border border-slate-700 p-2 rounded w-full text-white"
+            >
+              <option value="active">ACTIVE (Industrial - Script Controls Sequence)</option>
+              <option value="passive">PASSIVE (Wait for Waypoint Messages)</option>
+            </select>
+            <p className="text-xs text-slate-500 mt-1">
+              ACTIVE mode is recommended for industrial reliability
+            </p>
+          </div>
+
           <div className="grid grid-cols-3 gap-3 mb-2">
             <div>
               <label className="block text-xs text-slate-400">Servo Number</label>
@@ -102,12 +117,65 @@ export default function ConfigEditor({ selectedMode, JETSON_API, status, onRefre
               />
             </div>
           </div>
-          <label className="block text-xs text-slate-400">Delay Before ON:</label>
-          <input onChange={(e) => handleChange("wp_mark.delay_before_on", e.target.value)} className="bg-slate-900 border border-slate-700 p-2 rounded w-full text-white mb-2" />
-          <label className="block text-xs text-slate-400">Spray Duration:</label>
-          <input onChange={(e) => handleChange("wp_mark.spray_duration", e.target.value)} className="bg-slate-900 border border-slate-700 p-2 rounded w-full text-white mb-2" />
-          <label className="block text-xs text-slate-400">Delay After OFF:</label>
-          <input onChange={(e) => handleChange("wp_mark.delay_after_off", e.target.value)} className="bg-slate-900 border border-slate-700 p-2 rounded w-full text-white" />
+
+          <div className="grid grid-cols-2 gap-3 mb-2">
+            <div>
+              <label className="block text-xs text-slate-400">Delay Before ON (s)</label>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="10.0"
+                onChange={(e) => handleChange("wp_mark.delay_before_on", e.target.value)}
+                className="bg-slate-900 border border-slate-700 p-2 rounded w-full text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400">Spray Duration (s)</label>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="10.0"
+                onChange={(e) => handleChange("wp_mark.spray_duration", e.target.value)}
+                className="bg-slate-900 border border-slate-700 p-2 rounded w-full text-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-2">
+            <div>
+              <label className="block text-xs text-slate-400">Delay After OFF (s)</label>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="10.0"
+                onChange={(e) => handleChange("wp_mark.delay_after_off", e.target.value)}
+                className="bg-slate-900 border border-slate-700 p-2 rounded w-full text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-400">Waypoint Proximity (m)</label>
+              <input
+                type="number"
+                step="0.1"
+                placeholder="2.0"
+                onChange={(e) => handleChange("wp_mark.waypoint_proximity_threshold", e.target.value)}
+                className="bg-slate-900 border border-slate-700 p-2 rounded w-full text-white"
+              />
+              <p className="text-xs text-slate-500 mt-1">Distance to waypoint before spraying (Active mode only)</p>
+            </div>
+          </div>
+
+          {/* Industrial Features Info */}
+          <div className="bg-blue-900/20 border border-blue-700/50 rounded p-3 mt-4">
+            <h4 className="text-sm font-semibold text-blue-300 mb-2">🛡 Industrial Safety Features</h4>
+            <ul className="text-xs text-blue-200 space-y-1">
+              <li>• RTK Quality Verification (fix_type ≥ 5, ≤15cm accuracy)</li>
+              <li>• Velocity Monitoring (prevents spraying when stopped)</li>
+              <li>• Mission State Checks (AUTO mode + armed only)</li>
+              <li>• Emergency Stop capability</li>
+              <li>• Complete audit logging with GPS metrics</li>
+            </ul>
+          </div>
         </>
       )}
 

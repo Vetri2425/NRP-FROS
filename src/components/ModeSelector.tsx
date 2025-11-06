@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRover } from '../context/RoverContext';
+import { startWPMarkMissionFromSavedConfig } from '../services/wpMarkService';
+import WPMarkDialog from './WPMarkDialog';
 
-const AVAILABLE_MODES = ['AUTO', 'GUIDED', 'HOLD', 'MANUAL', 'RTL', 'STEERING'];
+const AVAILABLE_MODES = ['AUTO', 'GUIDED', 'HOLD', 'MANUAL', 'WP_MARK'];
 
 const ModeSelector: React.FC = () => {
   const {
@@ -10,6 +12,7 @@ const ModeSelector: React.FC = () => {
   } = useRover();
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isWPMarkDialogOpen, setIsWPMarkDialogOpen] = useState(false);
 
   const normalizedMode = useMemo(
     () => state.mode?.toUpperCase?.() ?? 'UNKNOWN',
@@ -65,6 +68,13 @@ const ModeSelector: React.FC = () => {
     if (!selectedMode) {
       return;
     }
+    
+    // If WP_MARK mode is selected, open the dialog instead of changing mode
+    if (selectedMode === 'WP_MARK') {
+      setIsWPMarkDialogOpen(true);
+      return;
+    }
+    
     await runAction(
       () => services.setMode(selectedMode),
       (success) => (success ? `Mode change requested: ${selectedMode}` : 'Failed to set mode'),
@@ -83,6 +93,32 @@ const ModeSelector: React.FC = () => {
       },
     );
   }, [runAction, services, state.armed]);
+
+  const startMission = useCallback(async () => {
+    await runAction(
+      async () => {
+        // Only set mode to AUTO if not already in AUTO mode to avoid Context.init() error
+        if (state.mode !== 'AUTO') {
+          await services.setMode('AUTO');
+          // Add small delay to allow mode change to complete
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+
+        const response = await startWPMarkMissionFromSavedConfig();
+        if (!response.success) {
+          throw new Error(response.error || 'Failed to start mission');
+        }
+        return response;
+      },
+      (success) => {
+        if (!success) {
+          return 'Failed to start mission';
+        }
+        const missionInfo = (success as any).mission_info;
+        return `Mission started! ${missionInfo?.total_waypoints || 'N/A'} waypoints, ~${missionInfo?.estimated_duration_minutes?.toFixed(1) || 'N/A'} min`;
+      },
+    );
+  }, [runAction, services, state.mode]);
 
   return (
     <div className="bg-[#111827] rounded-lg flex flex-col overflow-hidden">
@@ -141,6 +177,16 @@ const ModeSelector: React.FC = () => {
         </button>
       </div>
 
+      <div className="flex items-center gap-2">
+        <button
+          onClick={startMission}
+          disabled={isLoading || !state.armed}
+          className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-orange-600 hover:bg-orange-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-1"
+        >
+          🚀 Start Mission
+        </button>
+      </div>
+
       {message && (
         <p
           className={`text-xs ${
@@ -151,6 +197,17 @@ const ModeSelector: React.FC = () => {
         </p>
       )}
       </div>
+
+      {/* WP_MARK Mission Dialog */}
+      {isWPMarkDialogOpen && (
+        <WPMarkDialog
+          isOpen={isWPMarkDialogOpen}
+          onClose={() => {
+            setIsWPMarkDialogOpen(false);
+            setSelectedMode(normalizedMode); // Reset to current mode
+          }}
+        />
+      )}
     </div>
   );
 };

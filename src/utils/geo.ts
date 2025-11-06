@@ -9,13 +9,34 @@ const EARTH_RADIUS_METERS = 6371000;
  * @returns The distance in meters.
  */
 export const calculateDistance = (p1: { lat: number, lng: number }, p2: { lat: number, lng: number }): number => {
+    // Validate input coordinates
+    if (!p1 || !p2 || 
+        !Number.isFinite(p1.lat) || !Number.isFinite(p1.lng) ||
+        !Number.isFinite(p2.lat) || !Number.isFinite(p2.lng)) {
+        console.warn('[calculateDistance] Invalid coordinates:', { p1, p2 });
+        return 0;
+    }
+
+    // Validate latitude and longitude ranges
+    if (Math.abs(p1.lat) > 90 || Math.abs(p2.lat) > 90) {
+        console.warn('[calculateDistance] Invalid latitude (must be -90 to 90):', { p1, p2 });
+        return 0;
+    }
+    if (Math.abs(p1.lng) > 180 || Math.abs(p2.lng) > 180) {
+        console.warn('[calculateDistance] Invalid longitude (must be -180 to 180):', { p1, p2 });
+        return 0;
+    }
+
     const dLat = (p2.lat - p1.lat) * Math.PI / 180;
     const dLng = (p2.lng - p1.lng) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
               Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) *
               Math.sin(dLng / 2) * Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return EARTH_RADIUS_METERS * c;
+    const distance = EARTH_RADIUS_METERS * c;
+
+    // Ensure result is valid
+    return Number.isFinite(distance) && distance >= 0 ? distance : 0;
 };
 
 /**

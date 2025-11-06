@@ -10,7 +10,6 @@ import { RulerIcon } from './icons/RulerIcon';
 import { LineIcon } from './icons/LineIcon';
 import { RectangleIcon } from './icons/RectangleIcon';
 import { CircleIcon } from './icons/CircleIcon';
-import { PolygonIcon } from './icons/PolygonIcon';
 import { HexagonIcon } from './icons/HexagonIcon';
 import { GeofenceIcon } from './icons/GeofenceIcon';
 import { DebugIcon } from './icons/DebugIcon';
@@ -46,11 +45,10 @@ type MapViewProps = {
   };
 };
 
-type Tool = 'measure' | 'profile' | 'line' | 'rectangle' | 'circle' | 'polygon' | 'hexagon' | 'geofence' | null;
+type Tool = 'measure' | 'profile' | 'line' | 'rectangle' | 'circle' | 'hexagon' | 'geofence' | null;
 
 const MAP_COMMANDS = new Set<string>([
   'WAYPOINT',
-  'SPLINE_WAYPOINT',
   'TAKEOFF',
   'LAND',
   'RETURN_TO_LAUNCH',
@@ -122,12 +120,16 @@ const MapView: React.FC<MapViewProps> = ({
 }) => {
   const pathWaypoints = useMemo(
     () =>
-      missionWaypoints.filter(
-        (wp) =>
-          MAP_COMMANDS.has(wp.command) &&
-          Number.isFinite(wp.lat) &&
-          Number.isFinite(wp.lng)
-      ),
+      missionWaypoints.filter((wp) => {
+        // Only consider navigation commands that should appear on the map
+        if (!MAP_COMMANDS.has(wp.command)) return false;
+        // Respect explicit flag to hide waypoints from the map (placeholders)
+        if (wp.showOnMap === false) return false;
+        if (!Number.isFinite(wp.lat) || !Number.isFinite(wp.lng)) return false;
+        // Optional: ignore obvious placeholder coords (0,0)
+        if (wp.lat === 0 && wp.lng === 0) return false;
+        return true;
+      }),
     [missionWaypoints]
   );
 
@@ -458,7 +460,9 @@ const MapView: React.FC<MapViewProps> = ({
   }, []);
 
   useEffect(() => {
-    invalidateAndFitBounds();
+    // Auto-fit on view mode / fullscreen changes was removed per request.
+    // Keeping this effect intentionally empty to avoid automatic zoom/pan.
+    // Call `invalidateAndFitBounds()` manually via Ctrl+M or programmatic action if needed.
   }, [viewMode, isFullScreen, isMapFullScreen, invalidateAndFitBounds]);
 
   // Reset auto-fit state whenever the mission geometry changes
@@ -485,7 +489,7 @@ const MapView: React.FC<MapViewProps> = ({
     const handleMouseMove = (e: any) => {
         setMousePos(e.latlng);
         if (isDrawingRef.current) {
-          if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'hexagon') {
+        if (activeTool === 'rectangle' || activeTool === 'circle' || activeTool === 'hexagon') {
              setDrawnPoints(prev => [prev[0], e.latlng]);
           }
         }
@@ -547,14 +551,13 @@ const MapView: React.FC<MapViewProps> = ({
     };
 
 
-    switch (activeTool) {
-        case 'line':
-        case 'polygon':
-        case 'measure':
-            map.on('click', handlePointClick);
-            map.on('dblclick', handleFinishWithDoubleClick);
-            map.getContainer().style.cursor = 'crosshair';
-            break;
+  switch (activeTool) {
+    case 'line':
+    case 'measure':
+      map.on('click', handlePointClick);
+      map.on('dblclick', handleFinishWithDoubleClick);
+      map.getContainer().style.cursor = 'crosshair';
+      break;
         case 'rectangle':
         case 'circle':
         case 'hexagon':
@@ -592,14 +595,10 @@ const MapView: React.FC<MapViewProps> = ({
                 L.circle(drawnPoints[0], { ...drawOptions, color, radius }).addTo(drawingLayerRef.current);
             } else {
                  drawnPoints.forEach(p => L.circleMarker(p, { radius: 4, color: '#22c55e', fillOpacity: 1 }).addTo(drawingLayerRef.current));
-                 if (mousePos && drawnPoints.length > 0) {
-                    const previewPoints = [...drawnPoints, mousePos];
-                     L.polyline(previewPoints, drawOptions).addTo(drawingLayerRef.current);
-                     if (activeTool === 'polygon') {
-                        // Also draw a closing line for polygons
-                        L.polyline([drawnPoints[drawnPoints.length - 1], drawnPoints[0]], drawOptions).addTo(drawingLayerRef.current);
-                     }
-                 }
+            if (mousePos && drawnPoints.length > 0) {
+               const previewPoints = [...drawnPoints, mousePos];
+              L.polyline(previewPoints, drawOptions).addTo(drawingLayerRef.current);
+            }
             }
         } else if (activeTool === 'measure') {
             let totalDistance = 0;
@@ -700,11 +699,8 @@ const MapView: React.FC<MapViewProps> = ({
         }
       }
       
-      // Auto-fit only once for a given mission
-      if (!hasFittedMissionRef.current) {
-        invalidateAndFitBounds();
-        hasFittedMissionRef.current = true;
-      }
+      // Auto-fit on mission load has been disabled per user request.
+      // If a manual fit is needed, press Ctrl+M (keyboard) or call `invalidateAndFitBounds()` programmatically.
     }
     
     // Performance tracking
@@ -834,24 +830,11 @@ const MapView: React.FC<MapViewProps> = ({
 
   // Keep rover in view without constantly re-fitting bounds (prevents zoom/pan oscillation)
   useEffect(() => {
-    if (!mapRef.current || !roverPosition) return;
-    const map = mapRef.current;
-    const currentBounds = map.getBounds();
-    const roverLatLng = L.latLng(roverPosition.lat, roverPosition.lng);
-    // If rover drifts out of view (with a small margin), gently pan back
-    if (!currentBounds.pad(-0.2).contains(roverLatLng)) {
-      if (pathWaypoints.length > 0) {
-        const missionBounds = L.latLngBounds(pathWaypoints.map((wp) => [wp.lat, wp.lng]));
-        if (missionBounds.isValid()) {
-          const combined = missionBounds.extend(roverLatLng);
-          map.fitBounds(combined.pad(0.2), { animate: true, duration: 0.5, maxZoom: 26 });
-        } else {
-          map.panTo(roverLatLng, { animate: true, duration: 0.5 });
-        }
-      } else {
-        map.panTo(roverLatLng, { animate: true, duration: 0.5 });
-      }
-    }
+    // Auto-pan / auto-zoom behavior disabled per user request.
+    // Previously, the map would automatically pan or fit bounds when the rover
+    // moved out of view. That behavior caused unexpected view jumps.
+    // Intentionally no-op: keep the user's current map view stable.
+    // If a manual center/fit is needed, user can press Ctrl+R (center) or Ctrl+M (fit bounds).
   }, [roverPosition, pathWaypoints]);
   
   // Remove heading line (blue) between rover and next waypoint per request
@@ -930,12 +913,11 @@ const MapView: React.FC<MapViewProps> = ({
     { name: 'line', icon: LineIcon, title: 'Draw Path' },
     { name: 'rectangle', icon: RectangleIcon, title: 'Draw Rectangle' },
     { name: 'circle', icon: CircleIcon, title: 'Draw Circle' },
-    { name: 'polygon', icon: PolygonIcon, title: 'Draw Polygon' },
     { name: 'hexagon', icon: HexagonIcon, title: 'Draw Hexagon' },
     { name: 'geofence', icon: GeofenceIcon, title: 'Create Geofence' },
   ];
   
-  const isToolActive = activeTool && ['line', 'rectangle', 'circle', 'polygon', 'hexagon', 'measure', 'geofence'].includes(activeTool);
+  const isToolActive = activeTool && ['line', 'rectangle', 'circle', 'hexagon', 'measure', 'geofence'].includes(activeTool);
 
   return (
     <div ref={mapWrapperRef} className="relative w-full h-full rounded-lg overflow-hidden bg-gray-700 flex flex-col">
@@ -1248,7 +1230,7 @@ const MapView: React.FC<MapViewProps> = ({
        </div>
        <div ref={mapContainerRef} className="w-full flex-1" aria-label="Interactive map for setting a waypoint" />
        
-       {/* Debug Panel */}
+       {/* Debug Panel (temporarily commented out)
        {showDebugPanel && (
          <div className="absolute bottom-2 right-2 z-[2500] w-80 bg-gray-900 bg-opacity-95 text-white rounded-lg border border-gray-700 shadow-xl overflow-hidden">
            <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-green-600 to-teal-600">
@@ -1356,6 +1338,7 @@ const MapView: React.FC<MapViewProps> = ({
            </div>
          </div>
        )}
+       */}
 
         {/* Layer visibility toggles */}
         <div className="absolute top-2 left-2 z-[1200] bg-gray-800/80 text-white rounded-md border border-gray-700 p-2">

@@ -122,6 +122,9 @@ export type Waypoint = {
   param3?: number;
   param4?: number;
   action?: string;
+  // When false, the MapView should not render this waypoint as a map marker.
+  // Useful for command-only placeholders (DO/COND) that shouldn't affect the map.
+  showOnMap?: boolean;
 };
 
 export type ViewMode = 'dashboard' | 'planning' | 'live' | 'logs' | 'map' | 'setup' | 'servo';

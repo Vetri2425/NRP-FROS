@@ -107,6 +107,9 @@ const createDefaultTelemetry = (): RoverTelemetry => ({
   mission: { ...DEFAULT_MISSION },
   servo: { ...DEFAULT_SERVO },
   network: { ...DEFAULT_NETWORK },
+  hrms: 0,
+  vrms: 0,
+  imu_status: 'UNKNOWN',
   lastMessageTs: null,
 });
 
@@ -139,17 +142,37 @@ async function getService<T extends ServiceResponse = ServiceResponse>(path: str
 const mapRtkStatusToFixType = (status?: string | null): number => {
   const normalized = (status ?? '').toUpperCase();
   switch (normalized) {
-    case 'RTK FIXED':
-    case 'FIX':
+    // Unified mapping:
+    // 0 = No GPS
+    // 1 = No Fix
+    // 2 = 2D Fix
+    // 3 = 3D Fix / GPS Fix
+    // 4 = DGPS
+    // 5 = RTK Float
+    // 6 = RTK Fixed
+    case 'NO GPS':
+    case 'NOGPS':
+    case 'NO_SIGNAL':
+      return 0;
+    case 'NO FIX':
+    case 'NOFIX':
+      return 1;
+    case '2D FIX':
+    case '2D':
+      return 2;
+    case '3D FIX':
+    case '3D':
+    case 'GPS FIX':
+    case 'GPS':
+      return 3;
+    case 'DGPS':
       return 4;
     case 'RTK FLOAT':
     case 'FLOAT':
-      return 3;
-    case 'DGPS':
-      return 2;
-    case 'GPS FIX':
-    case 'GPS':
-      return 1;
+      return 5;
+    case 'RTK FIXED':
+    case 'FIX':
+      return 6;
     default:
       return 0;
   }
@@ -187,11 +210,23 @@ const toTelemetryEnvelopeFromRoverData = (data: any): TelemetryEnvelope | null =
     const hasValidLng = typeof lngNum === 'number' && isFinite(lngNum) && lngNum !== 0;
     
     if (hasValidLat && hasValidLng) {
+      // Try to extract a sensible velocity from common server fields. Backends may
+      // send speed under different keys (vel, velocity, speed, groundspeed) or
+      // nested under data.global.vel. Accept numeric strings as well.
+      let velCandidate: number | undefined;
+      if (typeof data.vel === 'number') velCandidate = data.vel;
+      else if (typeof data.velocity === 'number') velCandidate = data.velocity;
+      else if (typeof data.speed === 'number') velCandidate = data.speed;
+      else if (typeof data.groundspeed === 'number') velCandidate = data.groundspeed;
+      else if (data.global && typeof data.global.vel === 'number') velCandidate = data.global.vel;
+      else if (typeof data.vel === 'string') velCandidate = parseFloat(data.vel) || undefined;
+      else if (typeof data.velocity === 'string') velCandidate = parseFloat(data.velocity) || undefined;
+
       envelope.global = {
         lat: latNum,
         lon: lngNum,
         alt_rel: typeof data.distanceToNext === 'number' ? data.distanceToNext : 0,
-        vel: 0,
+        vel: typeof velCandidate === 'number' && isFinite(velCandidate) ? velCandidate : 0,
         satellites_visible: typeof data.satellites_visible === 'number' ? data.satellites_visible : 0,
       };
       touched = true;
@@ -207,6 +242,21 @@ const toTelemetryEnvelopeFromRoverData = (data: any): TelemetryEnvelope | null =
       voltage: typeof data.voltage === 'number' ? data.voltage : 0,
       current: typeof data.current === 'number' ? data.current : 0,
     };
+    touched = true;
+  }
+
+  // HRMS / VRMS / IMU status (if provided by backend)
+  if (data.hrms != null) {
+    envelope.hrms = typeof data.hrms === 'number' ? data.hrms : parseFloat(data.hrms) || 0;
+    touched = true;
+  }
+  if (data.vrms != null) {
+    envelope.vrms = typeof data.vrms === 'number' ? data.vrms : parseFloat(data.vrms) || 0;
+    touched = true;
+  }
+  if (data.imu_status != null || data.imuStatus != null) {
+    const s = data.imu_status ?? data.imuStatus;
+    envelope.imu_status = typeof s === 'string' ? s : String(s);
     touched = true;
   }
 
@@ -380,6 +430,19 @@ const toTelemetryEnvelopeFromBridge = (data: any): TelemetryEnvelope | null => {
   }
 
   // Extract mission data
+  // Optional HRMS/VRMS/IMU fields from bridge payload
+  if (typeof data.hrms === 'number' || typeof data.hrms === 'string') {
+    envelope.hrms = typeof data.hrms === 'number' ? data.hrms : parseFloat(data.hrms) || 0;
+    touched = true;
+  }
+  if (typeof data.vrms === 'number' || typeof data.vrms === 'string') {
+    envelope.vrms = typeof data.vrms === 'number' ? data.vrms : parseFloat(data.vrms) || 0;
+    touched = true;
+  }
+  if (data.imu_status || data.imuStatus) {
+    envelope.imu_status = data.imu_status ?? data.imuStatus;
+    touched = true;
+  }
   if (data.mission && typeof data.mission === 'object') {
     envelope.mission = {
       total_wp: typeof data.mission.total_wp === 'number' ? data.mission.total_wp : 0,
@@ -447,6 +510,15 @@ export function useRoverROS(): UseRoverROSResult {
   const connectSocketRef = useRef<() => void>(() => {});
   const mountedRef = useRef(true);
 
+  // Reset telemetry to default state (called on disconnect)
+  const resetTelemetry = useCallback(() => {
+    const defaultTelemetry = createDefaultTelemetry();
+    mutableRef.current.telemetry = defaultTelemetry;
+    mutableRef.current.lastEnvelopeTs = null;
+    setTelemetrySnapshot(defaultTelemetry);
+    console.log('[useRoverROS] Telemetry reset to default state');
+  }, []);
+
   const applyEnvelope = useCallback((envelope: TelemetryEnvelope) => {
     const mutable = mutableRef.current;
     const next = { ...mutable.telemetry };
@@ -471,6 +543,16 @@ export function useRoverROS(): UseRoverROSResult {
     }
     if (envelope.network) {
       next.network = { ...next.network, ...envelope.network };
+    }
+    // Pass through optional HRMS/VRMS/IMU values
+    if ((envelope as any).hrms !== undefined) {
+      (next as any).hrms = (envelope as any).hrms;
+    }
+    if ((envelope as any).vrms !== undefined) {
+      (next as any).vrms = (envelope as any).vrms;
+    }
+    if ((envelope as any).imu_status !== undefined) {
+      (next as any).imu_status = (envelope as any).imu_status;
     }
     if ((envelope as any).attitude) {
       next.attitude = { ...(next.attitude || {}), ...(envelope as any).attitude } as any;
@@ -535,6 +617,12 @@ export function useRoverROS(): UseRoverROSResult {
       clearTimeout(pendingDispatchRef.current);
       pendingDispatchRef.current = null;
     }
+    
+    // Reset telemetry on teardown
+    const defaultTelemetry = createDefaultTelemetry();
+    mutableRef.current.telemetry = defaultTelemetry;
+    mutableRef.current.lastEnvelopeTs = null;
+    setTelemetrySnapshot(defaultTelemetry);
   }, [clearReconnectTimer]);
 
   const scheduleReconnect = useCallback(() => {
@@ -636,6 +724,7 @@ export function useRoverROS(): UseRoverROSResult {
 
         socket.on('connect_error', (error) => {
           console.error('Socket.IO connection error:', error);
+          resetTelemetry();
           setConnectionState('error');
           scheduleReconnect();
         });
@@ -646,6 +735,8 @@ export function useRoverROS(): UseRoverROSResult {
             manualDisconnectRef.current = false;
             return;
           }
+          // Clear all telemetry data on disconnect
+          resetTelemetry();
           setConnectionState('disconnected');
           if (reason === 'io server disconnect') {
             socket.connect();
@@ -708,7 +799,7 @@ export function useRoverROS(): UseRoverROSResult {
         scheduleReconnect();
       }
     }, 100);
-  }, [clearReconnectTimer, handleBridgeTelemetry, handleRoverData, scheduleReconnect, teardownSocket]);
+  }, [clearReconnectTimer, handleBridgeTelemetry, handleRoverData, resetTelemetry, scheduleReconnect, teardownSocket]);
 
   const reconnect = useCallback(() => {
     clearReconnectTimer();

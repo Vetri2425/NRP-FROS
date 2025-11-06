@@ -7,6 +7,24 @@ export const calculateDistance = (
   wp1: { lat: number; lng: number },
   wp2: { lat: number; lng: number }
 ): number => {
+  // Validate input coordinates
+  if (!wp1 || !wp2 || 
+      !Number.isFinite(wp1.lat) || !Number.isFinite(wp1.lng) ||
+      !Number.isFinite(wp2.lat) || !Number.isFinite(wp2.lng)) {
+    console.warn('[missionCalculator] Invalid coordinates:', { wp1, wp2 });
+    return 0;
+  }
+
+  // Validate latitude and longitude ranges
+  if (Math.abs(wp1.lat) > 90 || Math.abs(wp2.lat) > 90) {
+    console.warn('[missionCalculator] Invalid latitude (must be -90 to 90):', { wp1, wp2 });
+    return 0;
+  }
+  if (Math.abs(wp1.lng) > 180 || Math.abs(wp2.lng) > 180) {
+    console.warn('[missionCalculator] Invalid longitude (must be -180 to 180):', { wp1, wp2 });
+    return 0;
+  }
+
   const R = 6371000; // Earth radius in meters
   const lat1 = (wp1.lat * Math.PI) / 180;
   const lat2 = (wp2.lat * Math.PI) / 180;
@@ -21,18 +39,24 @@ export const calculateDistance = (
       Math.sin(deltaLng / 2);
 
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
+  const distance = R * c;
+
+  // Ensure result is valid
+  return Number.isFinite(distance) && distance >= 0 ? distance : 0;
 };
 
 /**
  * Calculate total mission distance
  */
 export const calculateMissionDistance = (waypoints: Waypoint[]): number => {
-  if (waypoints.length < 2) return 0;
+  if (!Array.isArray(waypoints) || waypoints.length < 2) return 0;
 
   let totalDistance = 0;
   for (let i = 1; i < waypoints.length; i++) {
-    totalDistance += calculateDistance(waypoints[i - 1], waypoints[i]);
+    const distance = calculateDistance(waypoints[i - 1], waypoints[i]);
+    if (Number.isFinite(distance) && distance >= 0) {
+      totalDistance += distance;
+    }
   }
   return totalDistance;
 };

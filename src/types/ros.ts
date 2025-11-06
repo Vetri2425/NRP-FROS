@@ -69,6 +69,10 @@ export interface TelemetryEnvelope {
   global?: TelemetryGlobal;
   battery?: TelemetryBattery;
   rtk?: TelemetryRtk;
+  // Optional horizontal / vertical RMS and IMU status supplied by backend
+  hrms?: number;
+  vrms?: number;
+  imu_status?: string;
   mission?: TelemetryMission;
   servo?: ServoStatus;
   network?: NetworkData;
@@ -93,6 +97,10 @@ export interface RoverTelemetry {
   global: TelemetryGlobal;
   battery: TelemetryBattery;
   rtk: TelemetryRtk;
+  // Optional accuracy metrics and IMU status
+  hrms?: number;
+  vrms?: number;
+  imu_status?: string;
   mission: TelemetryMission;
   servo: ServoStatus;
   network: NetworkData;

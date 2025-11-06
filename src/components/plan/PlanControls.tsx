@@ -1,9 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { toast } from 'react-toastify';
 import CircleTool from '../../tools/CircleTool';
-import PolygonTool from '../../tools/PolygonTool';
 import SurveyGridTool from '../../tools/SurveyGridTool';
-import SplineWaypointTool from '../../tools/SplineWaypointTool';
 import { ChevronDownIcon } from '../icons/ChevronDownIcon';
 import { MissionFileInfo, Waypoint } from '../../types';
 import { parseMissionFile, ParsedWaypoint } from '../../utils/missionParser';
@@ -27,6 +25,10 @@ type PlanControlsProps = {
   uploadProgress: number;
   missionFileInfo: MissionFileInfo | null;
   onClearMission: () => void;
+  // Optional home position provided by App (set via map click or telemetry)
+  homePosition?: { lat: number; lng: number; alt?: number } | null;
+  // Trigger interactive set-home mode (next map click sets home)
+  onStartSetHome?: () => void;
 };
 
 const PlanControls: React.FC<PlanControlsProps> = ({
@@ -40,6 +42,8 @@ const PlanControls: React.FC<PlanControlsProps> = ({
   uploadProgress,
   missionFileInfo,
   onClearMission,
+  homePosition,
+  onStartSetHome,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isWriting, setIsWriting] = useState(false);
@@ -49,9 +53,7 @@ const PlanControls: React.FC<PlanControlsProps> = ({
   const [readErrorMessage, setReadErrorMessage] = useState<string | null>(null);
   const [currentFile, setCurrentFile] = useState<MissionFileInfo | null>(null);
   const [showCircleTool, setShowCircleTool] = useState(false);
-  const [showPolygonTool, setShowPolygonTool] = useState(false);
   const [showSurveyGridTool, setShowSurveyGridTool] = useState(false);
-  const [showSplineTool, setShowSplineTool] = useState(false);
 
   // Upload progress tracking state
   const [uploadProgressState, setUploadProgressState] = useState({
@@ -389,7 +391,7 @@ const PlanControls: React.FC<PlanControlsProps> = ({
     preventDefault: true
   });
 
-  const homeLocation = missionWaypoints.length > 0 ? missionWaypoints[0] : null;
+  const homeLocation = (homePosition ?? (missionWaypoints.length > 0 ? missionWaypoints[0] : null));
 
   // Servo control logic removed from Plan tab
 
@@ -466,24 +468,10 @@ const PlanControls: React.FC<PlanControlsProps> = ({
                   <span className="text-xs bg-green-900 px-1 py-0.5 rounded">MP</span>
                 </button>
                 <button
-                  onClick={() => setShowPolygonTool(true)}
-                  className="w-full bg-purple-700 hover:bg-purple-800 text-white py-1.5 rounded-md text-xs font-medium"
-                >
-                  🗺️ Polygon Mission
-                </button>
-                <button
                   onClick={() => setShowCircleTool(true)}
                   className="w-full bg-sky-700 hover:bg-sky-800 text-white py-1.5 rounded-md text-xs font-medium"
                 >
                   🌀 Circle
-                </button>
-                <button
-                  onClick={() => setShowSplineTool(true)}
-                  disabled={missionWaypoints.length === 0}
-                  className="w-full bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-1.5 rounded-md text-xs font-medium"
-                  title="Convert waypoints to smooth spline paths"
-                >
-                  〰️ Spline
                 </button>
               </div>
             </div>
@@ -575,7 +563,12 @@ const PlanControls: React.FC<PlanControlsProps> = ({
 
           {/* Home Info */}
           <div className="bg-slate-700 p-2 rounded-md mt-2">
-            <div className="text-xs font-medium text-white mb-1">Home Location</div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="text-xs font-medium text-white">Home Location</div>
+              <div>
+                <button onClick={() => onStartSetHome && onStartSetHome()} className="text-xs bg-indigo-600 hover:bg-indigo-500 px-2 py-0.5 rounded text-white">Set Home</button>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-1.5 text-xs">
               <div>
                 <span className="text-slate-300">Lat:</span>
@@ -614,65 +607,37 @@ const PlanControls: React.FC<PlanControlsProps> = ({
 
       {showCircleTool && (
         <CircleTool
-        onGenerate={(wps) =>
-          onUpload(wps, {
-            name: 'Circle Mission',
-            size: 0,
-            type: 'generated',
-            uploadedAt: new Date().toISOString(),
-            waypointCount: wps.length,
-            source: 'generated',
-          })
-        }
-        onClose={() => setShowCircleTool(false)}
-      />
-      )}
-      {showPolygonTool && (
-        <PolygonTool
-        onGenerate={(wps) =>
-          onUpload(wps, {
-            name: 'Polygon Mission',
-            size: 0,
-            type: 'generated',
-            uploadedAt: new Date().toISOString(),
-            waypointCount: wps.length,
-            source: 'generated',
-          })
-        }
-        onClose={() => setShowPolygonTool(false)}
-      />
+          defaultCenter={homePosition ?? undefined}
+          onGenerate={(wps) =>
+            onUpload(wps, {
+              name: 'Circle Mission',
+              size: 0,
+              type: 'generated',
+              uploadedAt: new Date().toISOString(),
+              waypointCount: wps.length,
+              source: 'generated',
+            })
+          }
+          onClose={() => setShowCircleTool(false)}
+        />
       )}
       {showSurveyGridTool && (
         <SurveyGridTool
-        onGenerate={(wps) =>
-          onUpload(wps, {
-            name: 'Survey Grid Mission',
-            size: 0,
-            type: 'generated',
-            uploadedAt: new Date().toISOString(),
-            waypointCount: wps.length,
-            source: 'generated',
-          })
-        }
-        onClose={() => setShowSurveyGridTool(false)}
-      />
+          defaultCenter={homePosition ?? undefined}
+          onGenerate={(wps) =>
+            onUpload(wps, {
+              name: 'Survey Grid Mission',
+              size: 0,
+              type: 'generated',
+              uploadedAt: new Date().toISOString(),
+              waypointCount: wps.length,
+              source: 'generated',
+            })
+          }
+          onClose={() => setShowSurveyGridTool(false)}
+        />
       )}
-      {showSplineTool && (
-        <SplineWaypointTool
-        currentWaypoints={missionWaypoints}
-        onConvert={(wps) =>
-          onUpload(wps, {
-            name: currentFile?.name.replace('.waypoints', '_spline.waypoints') || 'Spline Mission',
-            size: 0,
-            type: 'generated',
-            uploadedAt: new Date().toISOString(),
-            waypointCount: wps.length,
-            source: 'generated',
-          })
-        }
-        onClose={() => setShowSplineTool(false)}
-      />
-      )}
+      
 
       {/* Upload Progress Dialog */}
       <UploadProgressDialog

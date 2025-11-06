@@ -7,6 +7,7 @@ import { Waypoint } from "../types";
 type CircleToolProps = {
   onGenerate: (waypoints: Waypoint[]) => void;
   onClose: () => void;
+  defaultCenter?: { lat: number; lng: number; alt?: number } | null;
 };
 
 /**
@@ -61,12 +62,12 @@ function generateEnhancedCircleMission(
   return waypoints;
 }
 
-const CircleTool: React.FC<CircleToolProps> = ({ onGenerate, onClose }) => {
-  const [centerLat, setCenterLat] = useState(13.0764);
-  const [centerLng, setCenterLng] = useState(80.1559);
+const CircleTool: React.FC<CircleToolProps> = ({ onGenerate, onClose, defaultCenter }) => {
+  const [centerLat, setCenterLat] = useState(defaultCenter?.lat ?? 13.0764);
+  const [centerLng, setCenterLng] = useState(defaultCenter?.lng ?? 80.1559);
   const [radius, setRadius] = useState(30);
   const [points, setPoints] = useState(12);
-  const [altitude, setAltitude] = useState(30);
+  const [altitude, setAltitude] = useState(defaultCenter?.alt ?? 30);
   const [startAngle, setStartAngle] = useState(0);
   const [clockwise, setClockwise] = useState(true);
 

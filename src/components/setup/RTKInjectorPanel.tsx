@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRover } from '../../context/RoverContext';
 
 interface RTKConfig {
@@ -9,7 +9,20 @@ interface RTKConfig {
   password: string;
 }
 
-const RTKInjectorPanel: React.FC = () => {
+type LogFn = (msg: string, data?: unknown) => void;
+type LogMap = Partial<{
+  info: LogFn;
+  warn: LogFn;
+  error: LogFn;
+  success: LogFn;
+  debug: LogFn;
+}>;
+
+interface RTKInjectorPanelProps {
+  onLog?: LogMap;
+}
+
+const RTKInjectorPanel: React.FC<RTKInjectorPanelProps> = ({ onLog }) => {
   const {
     services: { injectRTK, stopRTK, getRTKStatus },
   } = useRover();
@@ -28,6 +41,70 @@ const RTKInjectorPanel: React.FC = () => {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const monitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastBytesRef = useRef<number>(0);
+  const lastTsRef = useRef<number>(0);
+
+  const emit = useCallback(
+    (level: keyof Required<LogMap>, msg: string, data?: unknown) => {
+      try {
+        onLog?.[level]?.(msg, data);
+      } catch {
+        // ignore log errors
+      }
+    },
+    [onLog]
+  );
+
+  const stopMonitor = useCallback(() => {
+    if (monitorRef.current) {
+      clearInterval(monitorRef.current);
+      monitorRef.current = null;
+    }
+  }, []);
+
+  const startMonitor = useCallback(() => {
+    if (monitorRef.current) return;
+    lastBytesRef.current = totalBytes;
+    lastTsRef.current = Date.now();
+    emit('debug', 'Starting 4Hz RTK monitor', { interval_ms: 250 });
+    monitorRef.current = setInterval(async () => {
+      try {
+        const status = await getRTKStatus();
+        if (status.success) {
+          const now = Date.now();
+          const bytes = status.total_bytes ?? 0;
+          setTotalBytes(bytes);
+          const dt = (now - lastTsRef.current) / 1000;
+          if (dt > 0) {
+            const db = bytes - lastBytesRef.current;
+            const rateBps = db / dt;
+            emit('debug', 'RTK stream monitor', {
+              running: status.running ?? false,
+              total_bytes: bytes,
+              rate_bps: Math.max(0, Math.round(rateBps)),
+              delta_bytes: db,
+              caster_info: status.caster || 'unknown'
+            });
+          }
+          lastBytesRef.current = bytes;
+          lastTsRef.current = now;
+          if (!status.running) {
+            emit('error', 'RTK stream stopped unexpectedly', { 
+              total_bytes: bytes,
+              reason: 'Backend connection dropped. Possible causes: 1) Network timeout, 2) Invalid credentials, 3) Caster rejected connection, 4) Mountpoint not available'
+            });
+            setIsStreamRunning(false);
+            setError('Stream stopped unexpectedly. Check backend logs.');
+            stopMonitor();
+          }
+        }
+      } catch (e) {
+        emit('error', 'Failed to fetch RTK status in monitor', e instanceof Error ? e.message : e);
+      }
+    }, 250); // 4 Hz
+  }, [emit, getRTKStatus, stopMonitor, totalBytes]);
+
   // Check RTK status on mount and periodically
   useEffect(() => {
     const checkStatus = async () => {
@@ -36,9 +113,14 @@ const RTKInjectorPanel: React.FC = () => {
         if (status.success) {
           setIsStreamRunning(status.running || false);
           setTotalBytes(status.total_bytes || 0);
+          if (status.running) {
+            emit('info', 'RTK status: stream running');
+            startMonitor();
+          }
         }
       } catch (err) {
         console.error('Failed to get RTK status:', err);
+        emit('error', 'Failed to get RTK status', err instanceof Error ? err.message : err);
       }
     };
 
@@ -46,7 +128,13 @@ const RTKInjectorPanel: React.FC = () => {
     const interval = setInterval(checkStatus, 3000); // Check every 3 seconds
 
     return () => clearInterval(interval);
-  }, [getRTKStatus]);
+  }, [emit, getRTKStatus, startMonitor]);
+
+  useEffect(() => {
+    return () => {
+      stopMonitor();
+    };
+  }, [stopMonitor]);
 
   const handleInputChange = (field: keyof RTKConfig) => (
     e: React.ChangeEvent<HTMLInputElement>
@@ -70,6 +158,7 @@ const RTKInjectorPanel: React.FC = () => {
     const missingFields = requiredFields.filter(field => !config[field].trim());
     if (missingFields.length > 0) {
       setError(`Missing required fields: ${missingFields.join(', ')}`);
+      emit('warn', 'RTK start validation failed', { missing: missingFields });
       return;
     }
 
@@ -79,16 +168,51 @@ const RTKInjectorPanel: React.FC = () => {
 
     try {
       const ntripUrl = `rtcm://${config.username}:${config.password}@${config.casterAddress}:${config.port}/${config.mountpoint}`;
+      emit('info', 'Starting RTK stream', {
+        caster: config.casterAddress,
+        port: config.port,
+        mountpoint: config.mountpoint,
+        username: config.username,
+      });
       const response = await injectRTK(ntripUrl.trim());
       
       if (response.success) {
         setFeedback(response.message ?? 'RTK stream started successfully.');
         setIsStreamRunning(true);
+        emit('success', 'RTK stream started', { message: response.message });
+        
+        // Wait a moment then check actual connection status
+        setTimeout(async () => {
+          try {
+            const status = await getRTKStatus();
+            if (status.success) {
+              if (status.running) {
+                emit('info', 'RTK connection verified', { 
+                  running: true, 
+                  total_bytes: status.total_bytes || 0,
+                  caster: status.caster 
+                });
+                startMonitor();
+              } else {
+                emit('error', 'RTK stream failed to connect', { 
+                  running: false,
+                  reason: 'Backend reported stream stopped immediately after start. Check: 1) NTRIP credentials, 2) Network connectivity, 3) Caster availability, 4) Backend logs for connection errors'
+                });
+                setError('Stream started but connection failed. Check credentials and network.');
+                setIsStreamRunning(false);
+              }
+            }
+          } catch (err) {
+            emit('warn', 'Failed to verify RTK connection status', err instanceof Error ? err.message : err);
+          }
+        }, 1000); // Wait 1 second for backend to establish connection
       } else {
         setError(response.message ?? 'Failed to start RTK stream.');
+        emit('error', 'Failed to start RTK stream', response.message);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start RTK stream.');
+      emit('error', 'Exception while starting RTK stream', err instanceof Error ? err.message : err);
     } finally {
       setIsSubmitting(false);
     }
@@ -100,16 +224,21 @@ const RTKInjectorPanel: React.FC = () => {
     setError(null);
 
     try {
+      emit('info', 'Stopping RTK stream');
       const response = await stopRTK();
       
       if (response.success) {
         setFeedback(response.message ?? 'RTK stream stopped successfully.');
         setIsStreamRunning(false);
+        emit('success', 'RTK stream stopped');
+        stopMonitor();
       } else {
         setError(response.message ?? 'Failed to stop RTK stream.');
+        emit('error', 'Failed to stop RTK stream', response.message);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to stop RTK stream.');
+      emit('error', 'Exception while stopping RTK stream', err instanceof Error ? err.message : err);
     } finally {
       setIsSubmitting(false);
     }

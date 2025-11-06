@@ -32,14 +32,21 @@ const TelemetryPanel: React.FC = () => {
   const armed = state.armed ? 'Yes' : 'No';
   const rtkLabel = (() => {
     switch (rtk.fix_type) {
-      case 4:
-        return 'RTK Fixed';
-      case 3:
-        return 'RTK Float';
-      case 2:
-        return 'DGPS';
+      // 0: No GPS, 1: No Fix, 2: 2D Fix, 3: 3D Fix, 4: DGPS, 5: RTK Float, 6: RTK Fixed
+      case 0:
+        return 'No GPS';
       case 1:
-        return 'GPS Fix';
+        return 'No Fix';
+      case 2:
+        return '2D Fix';
+      case 3:
+        return '3D Fix';
+      case 4:
+        return 'DGPS';
+      case 5:
+        return 'RTK Float';
+      case 6:
+        return 'RTK Fixed';
       default:
         return 'No Fix';
     }

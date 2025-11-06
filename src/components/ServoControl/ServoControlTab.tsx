@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import ModeSelector from "./ModeSelector";
 import ConfigEditor from "./ConfigEditor";
+import ModeDescription from "./ModeDescription";
 import StatusPanel from "./StatusPanel";
 import LogViewer from "./LogViewer";
 import ReportPanel from "./ReportPanel";
@@ -56,6 +57,7 @@ export default function ServoControlTab() {
           status={status}
           onRefresh={refreshStatus}
         />
+        <ModeDescription selectedMode={selectedMode} />
       </div>
 
       <div className="flex flex-col gap-3">

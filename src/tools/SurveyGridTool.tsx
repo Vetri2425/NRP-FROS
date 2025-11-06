@@ -7,6 +7,7 @@ import { Waypoint } from "../types";
 type SurveyGridToolProps = {
   onGenerate: (waypoints: Waypoint[]) => void;
   onClose: () => void;
+  defaultCenter?: { lat: number; lng: number; alt?: number } | null;
 };
 
 /**
@@ -93,10 +94,10 @@ function generateSurveyGrid(
   return waypoints;
 }
 
-const SurveyGridTool: React.FC<SurveyGridToolProps> = ({ onGenerate, onClose }) => {
+const SurveyGridTool: React.FC<SurveyGridToolProps> = ({ onGenerate, onClose, defaultCenter }) => {
   // Grid center (can be updated to use map click)
-  const [centerLat, setCenterLat] = useState(13.0764);
-  const [centerLng, setCenterLng] = useState(80.1559);
+  const [centerLat, setCenterLat] = useState(defaultCenter?.lat ?? 13.0764);
+  const [centerLng, setCenterLng] = useState(defaultCenter?.lng ?? 80.1559);
   
   // Grid dimensions
   const [widthM, setWidthM] = useState(100);
@@ -109,7 +110,7 @@ const SurveyGridTool: React.FC<SurveyGridToolProps> = ({ onGenerate, onClose }) 
   const [angle, setAngle] = useState(0);
   
   // Flight altitude
-  const [altitude, setAltitude] = useState(30);
+  const [altitude, setAltitude] = useState(defaultCenter?.alt ?? 30);
   
   // Overlap percentage for camera/sensor coverage
   const [overlap, setOverlap] = useState(20);

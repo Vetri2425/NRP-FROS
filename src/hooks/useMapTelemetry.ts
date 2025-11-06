@@ -57,7 +57,8 @@ export function useMapTelemetry({
     if (!markerRef.current && roverPosition) {
       const status: 'armed' | 'disarmed' | 'rtk' = telemetry.state?.armed
         ? 'armed'
-        : (telemetry.rtk?.fix_type ?? 0) >= 4
+        // Treat DGPS (4) as non-RTK; RTK Float (5) and RTK Fixed (6) are considered RTK
+        : (telemetry.rtk?.fix_type ?? 0) >= 5
           ? 'rtk'
           : 'disarmed';
       
@@ -127,7 +128,7 @@ export function useMapTelemetry({
       // Update tooltip
       const status: 'armed' | 'disarmed' | 'rtk' = telemetry.state?.armed
         ? 'armed'
-        : (telemetry.rtk?.fix_type ?? 0) >= 4
+        : (telemetry.rtk?.fix_type ?? 0) >= 5
           ? 'rtk'
           : 'disarmed';
       const tt = `Lat: ${pos.lat.toFixed(6)}\nLon: ${pos.lng.toFixed(6)}\nAlt: ${(telemetry.global?.alt_rel ?? 0).toFixed(1)} m\nHeading: ${smoothedHeading.toFixed(1)}°`;

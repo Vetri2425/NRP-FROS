@@ -39,10 +39,12 @@ const TelemetryDebugPanel: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-gray-400">fix_type:</span>
                 <span className={`font-bold ${telemetry.rtk.fix_type > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {telemetry.rtk.fix_type} {telemetry.rtk.fix_type === 4 ? '(RTK Fixed)' : 
-                   telemetry.rtk.fix_type === 3 ? '(RTK Float)' : 
-                   telemetry.rtk.fix_type === 2 ? '(DGPS)' : 
-                   telemetry.rtk.fix_type === 1 ? '(GPS Fix)' : '(No Fix)'}
+            {telemetry.rtk.fix_type} {telemetry.rtk.fix_type === 6 ? '(RTK Fixed)' : 
+             telemetry.rtk.fix_type === 5 ? '(RTK Float)' : 
+             telemetry.rtk.fix_type === 4 ? '(DGPS)' : 
+             telemetry.rtk.fix_type === 3 ? '(3D Fix)' : 
+             telemetry.rtk.fix_type === 2 ? '(2D Fix)' : 
+             telemetry.rtk.fix_type === 1 ? '(No Fix)' : '(No GPS)'}
                 </span>
               </div>
               <div className="flex justify-between">

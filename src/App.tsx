@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { RoverProvider, useRover } from './context/RoverContext';
 import Header from './components/Header';
 import LeftSidebar from './components/LeftSidebar';
@@ -13,7 +13,7 @@ import { MissionFileInfo, Waypoint, ViewMode, RoverData } from './types';
 import { usePersistentState } from './hooks/usePersistentState';
 import { useMissionLogs } from './hooks/useMissionLogs';
 import { useMissionHistory } from './hooks/useMissionHistory';
-import { calculateDistancesForMission, calculateDistance } from './utils/geo';
+import { calculateDistancesForMission, calculateDistance, calculateBearing, calculateDestination } from './utils/geo';
 import { toQGCWPL110 } from './utils/missionParser';
 import { sanitizeWaypointsForUpload } from './utils/waypointValidator';
 import { RoverTelemetry } from './types/ros';
@@ -25,14 +25,21 @@ import 'react-toastify/dist/ReactToastify.css';
 
 const mapFixTypeToLabel = (fixType: number): string => {
   switch (fixType) {
-    case 4:
-      return 'RTK Fixed';
-    case 3:
-      return 'RTK Float';
-    case 2:
-      return 'DGPS';
+    // 0: No GPS, 1: No Fix, 2: 2D Fix, 3: 3D Fix, 4: DGPS, 5: RTK Float, 6: RTK Fixed
+    case 0:
+      return 'No GPS';
     case 1:
-      return 'GPS Fix';
+      return 'No Fix';
+    case 2:
+      return '2D Fix';
+    case 3:
+      return '3D Fix';
+    case 4:
+      return 'DGPS';
+    case 5:
+      return 'RTK Float';
+    case 6:
+      return 'RTK Fixed';
     default:
       return 'No Fix';
   }
@@ -62,13 +69,31 @@ const toRoverData = (
   const completedWaypointIds =
     currentWp > 1 ? Array.from({ length: currentWp - 1 }, (_, idx) => idx + 1) : [];
 
-  // Calculate distance to next waypoint
+  // Calculate distance to next waypoint with robust validation
   let distanceToNext = 0;
   if (position && currentWp > 0 && currentWp <= missionWaypoints.length) {
     const nextWaypoint = missionWaypoints[currentWp - 1]; // currentWp is 1-indexed
-    if (nextWaypoint) {
-      const distanceMeters = calculateDistance(position, { lat: nextWaypoint.lat, lng: nextWaypoint.lng });
-      distanceToNext = distanceMeters * 3.28084; // Convert meters to feet
+    if (nextWaypoint && 
+        Number.isFinite(nextWaypoint.lat) && 
+        Number.isFinite(nextWaypoint.lng)) {
+      try {
+        const distanceMeters = calculateDistance(position, { lat: nextWaypoint.lat, lng: nextWaypoint.lng });
+        // Use meters directly
+        distanceToNext = Number.isFinite(distanceMeters) && distanceMeters >= 0 
+          ? distanceMeters 
+          : 0;
+        
+        // 🔍 DEBUG: Log distance calculation
+        console.log('[APP.TSX toRoverData] Distance calculation:', {
+          'rover_position': position,
+          'next_waypoint': { lat: nextWaypoint.lat, lng: nextWaypoint.lng },
+          'distance_meters': distanceMeters,
+          'distance_feet': distanceToNext
+        });
+      } catch (error) {
+        console.error('[APP.TSX toRoverData] Distance calculation error:', error);
+        distanceToNext = 0;
+      }
     }
   }
 
@@ -98,8 +123,8 @@ const toRoverData = (
     rtk_status: rtkStatus,
     fix_type: telemetry.rtk.fix_type,
     satellites_visible: telemetry.global.satellites_visible,
-    hrms: 0.000, // TODO: Add HRMS to telemetry
-    vrms: 0.000, // TODO: Add VRMS to telemetry
+  hrms: typeof telemetry.hrms === 'number' ? telemetry.hrms : (typeof telemetry.hrms === 'string' ? parseFloat(telemetry.hrms) || 0 : 0),
+  vrms: typeof telemetry.vrms === 'number' ? telemetry.vrms : (typeof telemetry.vrms === 'string' ? parseFloat(telemetry.vrms) || 0 : 0),
     battery: telemetry.battery.percentage,
     voltage: telemetry.battery.voltage,
     current: telemetry.battery.current,
@@ -107,7 +132,7 @@ const toRoverData = (
     drop_rate: undefined,
     rc_connected: true,
     signal_strength: isConnected ? 'Good' : 'No Link',
-    imu_status: 'ALIGNED', // TODO: Add IMU status to telemetry
+  imu_status: telemetry.imu_status ?? 'ALIGNED', // prefer backend-supplied IMU status when available
     mission_progress: {
       current: telemetry.mission.current_wp,
       total: telemetry.mission.total_wp,
@@ -145,6 +170,9 @@ const AppContent: React.FC = () => {
     'app:selectedWaypoints',
     [],
   );
+  // Anchor selection separate from checkboxes (file-explorer style)
+  const [anchorSelectedIds, setAnchorSelectedIds] = useState<number[]>([]);
+  const [anchorLastClickedId, setAnchorLastClickedId] = useState<number | null>(null);
 
   const {
     missionLogs,
@@ -155,6 +183,10 @@ const AppContent: React.FC = () => {
 
   // When cleared, suppress live report metrics (distance, marked point, next point)
   const [isLiveReportCleared, setIsLiveReportCleared] = useState(false);
+  // Home position state (can be set by user or auto-updated by rover armed/disarm events)
+  const [homePosition, setHomePosition] = usePersistentState<{ lat: number; lng: number; alt?: number } | null>('app:homePosition', null);
+  const [awaitingHomeClick, setAwaitingHomeClick] = useState(false);
+  const firstArmedSeenRef = useRef<boolean>(false);
 
   // Mission history for undo/redo
   const {
@@ -309,10 +341,29 @@ const AppContent: React.FC = () => {
     try {
       // Sanitize waypoints before upload (e.g., convert negative altitudes to positive)
       const sanitizedWaypoints = sanitizeWaypointsForUpload(missionWaypoints);
+      // Confirmation: show counts and ask user to confirm upload
+      const total = sanitizedWaypoints.length;
+      const placeholders = sanitizedWaypoints.filter(wp => wp.showOnMap === false || (typeof wp.lat === 'number' && wp.lat === 0 && typeof wp.lng === 'number' && wp.lng === 0)).length;
+      const confirmMsg = `Upload ${total} waypoint(s) to rover. ${placeholders} placeholder/command-only waypoint(s) detected. Continue?`;
+      if (!window.confirm(confirmMsg)) {
+        console.log('User cancelled mission upload');
+        return false;
+      }
+      // Log the exact payload so developers can inspect what is being sent to the rover
+      console.log('[MISSION UPLOAD] Payload prepared for upload:', sanitizedWaypoints);
       
       const response = await services.uploadMission(sanitizedWaypoints);
       if (response.success) {
-        alert(`Mission upload requested (${missionWaypoints.length} waypoints).`);
+        // Immediately attempt to read mission back from rover to verify what was written
+        try {
+          const verifyResponse = await services.downloadMission();
+          const fetched = Array.isArray((verifyResponse as any).waypoints) ? (verifyResponse as any).waypoints : [];
+          console.log('[MISSION VERIFY] Rover returned waypoints on download:', fetched);
+          alert(`Mission upload requested (${missionWaypoints.length} waypoints). Rover reports ${fetched.length} waypoints after upload.`);
+        } catch (verifyErr) {
+          console.warn('Mission verification failed:', verifyErr);
+          alert(`Mission upload requested (${missionWaypoints.length} waypoints). Verification failed to read mission from rover.`);
+        }
         return true;
       }
       alert(response.message ?? 'Mission upload failed.');
@@ -382,6 +433,76 @@ const AppContent: React.FC = () => {
   const handleMapClick = () => {
     // placeholder for future map click behaviour
   };
+
+  // Start interactive set-home flow: next map click will set home
+  const startSetHome = useCallback(() => {
+    setAwaitingHomeClick(true);
+    alert('Click on the map to set Home position.');
+  }, []);
+
+  // Map click handler: if awaitingHomeClick, set home; otherwise noop
+  const handleMapClickActual = useCallback((lat: number, lng: number) => {
+    if (awaitingHomeClick) {
+      const newHome = { lat, lng, alt: 0 };
+      setHomePosition(newHome);
+      setAwaitingHomeClick(false);
+      alert(`Home set to ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+      return;
+    }
+    // other map click behavior can go here
+  }, [awaitingHomeClick, setHomePosition]);
+
+  // Telemetry-driven home update: set home on first arm after connect, and on disarm
+  useEffect(() => {
+    // track previous armed state
+    const prevArmed = (window as any).__prevArmedState ?? null;
+    const armedNow = telemetry.state?.armed ?? false;
+
+    if (connectionState === 'connected' && (window as any).__prevConnectionState !== 'connected') {
+      // just connected: reset first armed seen flag
+      firstArmedSeenRef.current = false;
+    }
+
+    // Arm transition: first arm after connect sets home if not set yet
+    if (armedNow && !firstArmedSeenRef.current) {
+      if (uiRoverData.position) {
+        setHomePosition({ lat: uiRoverData.position.lat, lng: uiRoverData.position.lng, alt: uiRoverData.altitude ?? 0 });
+        firstArmedSeenRef.current = true;
+        console.log('[APP] Home set from first arm at connect:', uiRoverData.position);
+      }
+    }
+
+    // Disarm transition: when rover disarms, update home to disarm position
+    if (!armedNow && prevArmed === true) {
+      if (uiRoverData.position) {
+        setHomePosition({ lat: uiRoverData.position.lat, lng: uiRoverData.position.lng, alt: uiRoverData.altitude ?? 0 });
+        firstArmedSeenRef.current = false;
+        console.log('[APP] Home set from disarm position:', uiRoverData.position);
+      }
+    }
+
+    (window as any).__prevArmedState = armedNow;
+    (window as any).__prevConnectionState = connectionState;
+  }, [telemetry.state?.armed, connectionState, uiRoverData.position, uiRoverData.altitude, setHomePosition]);
+
+  // Handle disconnection: clear live report and reset states
+  useEffect(() => {
+    const prevConnectionState = (window as any).__prevDisconnectState;
+    
+    // If we were connected before and now we're disconnected/error/connecting, clear live data
+    if (prevConnectionState === 'connected' && connectionState !== 'connected') {
+      console.log('[APP] Rover disconnected - clearing live data states');
+      setIsLiveReportCleared(true);
+    }
+    
+    // When reconnecting, reset the cleared flag to allow new data
+    if (connectionState === 'connected' && prevConnectionState !== 'connected') {
+      console.log('[APP] Rover reconnected - allowing new data');
+      setIsLiveReportCleared(false);
+    }
+    
+    (window as any).__prevDisconnectState = connectionState;
+  }, [connectionState]);
 
   const handleDeleteWaypoint = useCallback(
     (id: number) => {
@@ -455,9 +576,104 @@ const AppContent: React.FC = () => {
     [setSelectedWaypointIds],
   );
 
+  const handleSelectAllWaypoints = useCallback((selectAll: boolean) => {
+    if (!selectAll) {
+      setSelectedWaypointIds([]);
+      return;
+    }
+    setSelectedWaypointIds(missionWaypoints.map(wp => wp.id));
+  }, [missionWaypoints, setSelectedWaypointIds]);
+
+  const handleDeleteSelectedWaypoints = useCallback(() => {
+    if (!selectedWaypointIds.length) return;
+    const ok = window.confirm(`Delete ${selectedWaypointIds.length} selected waypoint(s)? This cannot be undone.`);
+    if (!ok) return;
+    setMissionWaypoints(prev => {
+      const next = prev.filter(wp => !selectedWaypointIds.includes(wp.id));
+      // Reindex ids to maintain 1..N sequence
+      return calculateDistancesForMission(next.map((wp, idx) => ({ ...wp, id: idx + 1 })));
+    });
+    setSelectedWaypointIds([]);
+  }, [selectedWaypointIds, setMissionWaypoints, setSelectedWaypointIds]);
+
+  const handleAddEmptyWaypoint = useCallback((insertAfterId?: number | null) => {
+    setMissionWaypoints(prev => {
+      const newWp: Waypoint = {
+        id: 0, // placeholder, we'll reindex
+        // Create as a CONDITION_DELAY placeholder (delay next waypoint) as default
+        command: 'CONDITION_DELAY',
+        frame: 3,
+        lat: 0,
+        lng: 0,
+        alt: 0,
+        current: 0,
+        autocontinue: 0,
+        param1: 1, // default 1 second delay
+        // Explicitly mark this as not shown on the map so MapView ignores it until coordinates assigned
+        showOnMap: false,
+      };
+      const next = prev.slice();
+      if (typeof insertAfterId === 'number') {
+        const idx = next.findIndex(wp => wp.id === insertAfterId);
+        const insertAt = idx >= 0 ? idx + 1 : next.length;
+        // Copy coordinates from previous waypoint (the anchor) into the new waypoint
+        if (idx >= 0) {
+          const anchor = next[idx];
+          if (anchor) {
+            newWp.lat = anchor.lat ?? 0;
+            newWp.lng = anchor.lng ?? 0;
+            newWp.alt = anchor.alt ?? 0;
+            // Show on map if anchor had valid coords
+            newWp.showOnMap = !!(typeof anchor.lat === 'number' && typeof anchor.lng === 'number' && !(anchor.lat === 0 && anchor.lng === 0));
+          }
+        }
+        next.splice(insertAt, 0, newWp);
+      } else {
+        // append: if there is at least one waypoint, copy last one's coords
+        const last = next[next.length - 1];
+        if (last) {
+          newWp.lat = last.lat ?? 0;
+          newWp.lng = last.lng ?? 0;
+          newWp.alt = last.alt ?? 0;
+          newWp.showOnMap = !!(typeof last.lat === 'number' && typeof last.lng === 'number' && !(last.lat === 0 && last.lng === 0));
+        }
+        next.push(newWp);
+      }
+      // Reindex to maintain sequential 1..N ids
+      const reindexed = next.map((wp, i) => ({ ...wp, id: i + 1 }));
+      return calculateDistancesForMission(reindexed);
+    });
+  }, [setMissionWaypoints]);
+
+  const handleRowAnchorClick = useCallback((id: number, ctrlKey: boolean) => {
+    setAnchorLastClickedId(id);
+    setAnchorSelectedIds(prev => {
+      if (ctrlKey) {
+        // toggle
+        if (prev.includes(id)) return prev.filter(x => x !== id);
+        return [...prev, id];
+      }
+      return [id];
+    });
+  }, []);
+
+  const handleDistanceChange = useCallback((id: number, distanceMeters: number) => {
+    const idx = missionWaypoints.findIndex(wp => wp.id === id);
+    if (idx <= 0) return; // first waypoint cannot be moved by distance
+    const prevWp = missionWaypoints[idx - 1];
+    const currWp = missionWaypoints[idx];
+    if (!prevWp || !currWp) return;
+    // Compute bearing from previous to current; if current has invalid coords, default bearing 0
+    const bearing = (typeof prevWp.lat === 'number' && typeof prevWp.lng === 'number' && typeof currWp.lat === 'number' && typeof currWp.lng === 'number')
+      ? calculateBearing({ lat: prevWp.lat, lng: prevWp.lng }, { lat: currWp.lat, lng: currWp.lng })
+      : 0;
+    const dest = calculateDestination({ lat: prevWp.lat, lng: prevWp.lng }, bearing, distanceMeters);
+    handleUpdateWaypointPosition(id, { lat: dest.lat, lng: dest.lng });
+  }, [missionWaypoints, handleUpdateWaypointPosition]);
+
   const commonMapProps = {
     missionWaypoints,
-    onMapClick: handleMapClick,
+    onMapClick: handleMapClickActual,
     roverPosition: uiRoverData.position, // Ensure roverPosition is passed
     heading: uiRoverData.heading, // Pass heading data to MapView
     viewMode,
@@ -497,6 +713,13 @@ const AppContent: React.FC = () => {
                   activeWaypointIndex={uiRoverData.activeWaypointIndex}
                   selectedWaypointIds={selectedWaypointIds}
                   onWaypointSelectionChange={handleWaypointSelectionChange}
+                  onSelectAll={handleSelectAllWaypoints}
+                  onDeleteSelected={handleDeleteSelectedWaypoints}
+                  onAddWaypoint={handleAddEmptyWaypoint}
+                  anchorSelectedIds={anchorSelectedIds}
+                  anchorLastClickedId={anchorLastClickedId}
+                  onRowAnchorClick={handleRowAnchorClick}
+                  onDistanceChange={handleDistanceChange}
                 />
               </div>
             </div>
@@ -512,6 +735,8 @@ const AppContent: React.FC = () => {
                 onClearMission={handleClearMission}
                 isConnected={isConnectedToRover}
                 uploadProgress={0}
+                homePosition={homePosition}
+                onStartSetHome={startSetHome}
               />
             </aside>
           </main>

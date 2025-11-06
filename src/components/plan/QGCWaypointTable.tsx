@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { TrashIcon } from '../icons/TrashIcon';
 import { Waypoint } from '../../types';
 import { getNavigationCommands, getDoCommands, getConditionCommands, getCommandDefinition } from '../../utils/mavlink_commands';
+import { calculateDistance } from '../../utils/geo';
 
 // Get all available commands organized by category
 const NAV_COMMANDS = getNavigationCommands();
@@ -26,6 +27,15 @@ type QGCWaypointTableProps = {
   activeWaypointIndex: number | null;
   selectedWaypointIds: number[];
   onWaypointSelectionChange: (id: number, isSelected: boolean) => void;
+  onSelectAll?: (selectAll: boolean) => void;
+  onDeleteSelected?: () => void;
+  onAddWaypoint?: (insertAfterId?: number | null) => void;
+  // Anchor selection (separate from checkbox selection) - file-explorer like
+  anchorSelectedIds?: number[];
+  anchorLastClickedId?: number | null;
+  onRowAnchorClick?: (id: number, ctrlKey: boolean) => void;
+  // Distance edit handler: distance from previous waypoint to this waypoint (meters)
+  onDistanceChange?: (id: number, distanceMeters: number) => void;
 };
 
 const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({ 
@@ -34,11 +44,13 @@ const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({
     onUpdate, 
     activeWaypointIndex,
     selectedWaypointIds,
-    onWaypointSelectionChange
+    onWaypointSelectionChange,
+    onSelectAll, onDeleteSelected, onAddWaypoint,
+    anchorSelectedIds, anchorLastClickedId, onRowAnchorClick, onDistanceChange
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const dragStartId = useRef<number | null>(null);
-  const headers = ['#', 'Sel', 'Curr', 'Frame', 'Command', 'Param1', 'Param2', 'Param3', 'Param4', 'X (Lat)', 'Y (Lon)', 'Z (Alt)', 'Auto', 'Actions'];
+  const headers = ['#', 'Sel', 'Curr', 'Frame', 'Command', 'Param1', 'Param2', 'Param3', 'Param4', 'Dist (m)', 'X (Lat)', 'Y (Lon)', 'Z (Alt)', 'Auto', 'Actions'];
 
   const handleSetCurrent = (id: number) => {
     waypoints.forEach(wp => {
@@ -65,10 +77,12 @@ const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({
     onUpdate(id, { command: e.target.value });
   };
 
-  const handleMouseDown = (id: number) => {
+  const handleMouseDown = (id: number, e?: React.MouseEvent) => {
     setIsDragging(true);
     dragStartId.current = id;
     onWaypointSelectionChange(id, !selectedWaypointIds.includes(id));
+    // Anchor selection (separate): single click selects anchor; ctrl toggles multi
+    if (onRowAnchorClick) onRowAnchorClick(id, !!(e && e.ctrlKey));
   };
 
   const handleMouseEnter = (id: number) => {
@@ -90,6 +104,39 @@ const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({
 
   return (
     <div className="bg-[#111827] h-full rounded-md p-2 flex flex-col text-xs text-gray-300 overflow-hidden" onMouseUp={handleMouseUp}>
+      <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center gap-2">
+          <button
+            onClick={() => onAddWaypoint && onAddWaypoint(anchorLastClickedId ?? null)}
+            className="text-xs bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded-md font-semibold"
+            aria-label="Add waypoint"
+          >
+            + Add WP
+          </button>
+          <div className="text-xs text-gray-400">QGC WPL 110</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="flex items-center gap-1 text-xs text-gray-300">
+            <input
+              type="checkbox"
+              className="form-checkbox"
+              checked={waypoints.length > 0 && selectedWaypointIds.length === waypoints.length}
+              onChange={(e) => onSelectAll && onSelectAll(e.target.checked)}
+              aria-label="Select all waypoints"
+            />
+            Select All
+          </label>
+          <button
+            onClick={() => onDeleteSelected && onDeleteSelected()}
+            className="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded-md font-semibold"
+            disabled={selectedWaypointIds.length === 0}
+            aria-disabled={selectedWaypointIds.length === 0}
+            aria-label="Delete selected waypoints"
+          >
+            Delete ({selectedWaypointIds.length})
+          </button>
+        </div>
+      </div>
       <h2 className="text-sm font-bold mb-1.5">Mission Plan (QGC WPL 110)</h2>
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         <table className="w-full text-left">
@@ -106,12 +153,12 @@ const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({
             {waypoints.length > 0 ? (
               waypoints.map((wp, index) => {
                 const isActive = wp.id === activeWaypointIndex;
-                return (
-                  <tr key={wp.id} className={`hover:bg-gray-800 ${isActive ? 'bg-green-800/50' : ''} ${selectedWaypointIds.includes(wp.id) ? 'bg-sky-800/40' : ''}`}>
+          return (
+            <tr key={wp.id} className={`hover:bg-gray-800 ${isActive ? 'bg-green-800/50' : ''} ${selectedWaypointIds.includes(wp.id) ? 'bg-sky-800/40' : ''} ${(anchorSelectedIds || []).includes(wp.id) ? 'ring-2 ring-yellow-400/40' : ''} ${anchorLastClickedId === wp.id ? 'ring-yellow-400' : ''}`}>
                     <td className="px-1.5 py-0.5 text-xs">{wp.id}</td>
                     <td
                       className="px-1.5 py-0.5"
-                      onMouseDown={() => handleMouseDown(wp.id)}
+                      onMouseDown={(e) => handleMouseDown(wp.id, e)}
                       onMouseEnter={() => handleMouseEnter(wp.id)}
                     >
                       <input
@@ -191,6 +238,39 @@ const QGCWaypointTable: React.FC<QGCWaypointTableProps> = ({
                         title={getParamLabel(wp.command, 4)}
                         placeholder={getParamLabel(wp.command, 4)}
                       />
+                    </td>
+                    <td className="px-1.5 py-0.5">
+                      {/* Distance from previous waypoint (meters). Disabled for first waypoint. */}
+                      {index === 0 ? (
+                        <input type="number" value={0} disabled className="bg-gray-800 w-20 p-0.5 rounded text-xs text-gray-400" />
+                      ) : (
+                        (() => {
+                          const prev = waypoints[index - 1];
+                          const distMeters = (typeof prev?.lat === 'number' && typeof wp.lat === 'number')
+                            ? calculateDistance({ lat: prev.lat, lng: prev.lng }, { lat: wp.lat, lng: wp.lng })
+                            : 0;
+                          const display = Math.round(distMeters * 10) / 10; // one decimal
+                          return (
+                            <input
+                              type="number"
+                              step="0.1"
+                              min={0}
+                              max={999}
+                              value={display}
+                              onChange={(e) => {
+                                const raw = parseFloat(e.target.value || '0');
+                                let clamped = Number.isFinite(raw) ? raw : 0;
+                                if (clamped < 0) clamped = 0;
+                                if (clamped > 999.9) clamped = 999.9;
+                                // Ensure one decimal precision
+                                clamped = Math.round(clamped * 10) / 10;
+                                if (onDistanceChange) onDistanceChange(wp.id, clamped);
+                              }}
+                              className="bg-gray-700 w-20 p-0.5 rounded text-xs font-mono"
+                            />
+                          );
+                        })()
+                      )}
                     </td>
                     <td className="px-1.5 py-0.5 font-mono"><input type="number" step="0.000001" value={wp.lat} onChange={(e) => handleValueChange(wp.id, 'lat', e.target.value)} className="bg-gray-700 w-24 p-0.5 rounded text-xs" /></td>
                     <td className="px-1.5 py-0.5 font-mono"><input type="number" step="0.000001" value={wp.lng} onChange={(e) => handleValueChange(wp.id, 'lng', e.target.value)} className="bg-gray-700 w-24 p-0.5 rounded text-xs" /></td>

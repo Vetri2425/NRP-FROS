@@ -1,11 +1,12 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Waypoint, RoverData } from '../../types';
 import { useRover } from '../../context/RoverContext';
 import MapView from '../MapView';
 import WaypointStatusList from './WaypointStatusList';
 import LiveControls from './LiveControls';
 import LiveStatusbar from './LiveStatusbar';
+import { getWPMarkStatus, pollWPMarkStatus, WPMarkStatus } from '../../services/wpMarkService';
 
 type LiveReportViewProps = {
   missionWaypoints: Waypoint[];
@@ -25,6 +26,8 @@ const LiveReportView: React.FC<LiveReportViewProps> = ({
   isCleared = false,
 }) => {
   const { telemetry } = useRover();
+  const [wpMarkStatus, setWpMarkStatus] = useState<WPMarkStatus | null>(null);
+  const [isPollingWpMark, setIsPollingWpMark] = useState(false);
   const activeWaypointId =
     !isCleared && liveRoverData.activeWaypointIndex !== null && liveRoverData.activeWaypointIndex !== undefined
       ? liveRoverData.activeWaypointIndex + 1
@@ -47,12 +50,56 @@ const LiveReportView: React.FC<LiveReportViewProps> = ({
       }
     : liveRoverData;
 
+  // Poll WP_MARK status when connected and not cleared
+  useEffect(() => {
+    if (!isConnected || isCleared) {
+      setWpMarkStatus(null);
+      setIsPollingWpMark(false);
+      return;
+    }
+
+    let stopPolling: (() => void) | null = null;
+
+    const checkAndStartPolling = async () => {
+      try {
+        const status = await getWPMarkStatus();
+        if (status.running) {
+          setWpMarkStatus(status);
+          if (!isPollingWpMark) {
+            setIsPollingWpMark(true);
+            stopPolling = pollWPMarkStatus((updatedStatus) => {
+              setWpMarkStatus(updatedStatus);
+            }, 2000); // Poll every 2 seconds
+          }
+        } else {
+          setWpMarkStatus(null);
+          setIsPollingWpMark(false);
+        }
+      } catch (error) {
+        console.error('Failed to check WP_MARK status:', error);
+        setWpMarkStatus(null);
+        setIsPollingWpMark(false);
+      }
+    };
+
+    // Initial check
+    checkAndStartPolling();
+
+    // Cleanup
+    return () => {
+      if (stopPolling) {
+        stopPolling();
+      }
+      setIsPollingWpMark(false);
+    };
+  }, [isConnected, isCleared, isPollingWpMark]);
+
   return (
     <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden min-h-0">
       {/* Top section with 3 panels */}
       <div className="flex-1 flex gap-3 overflow-hidden min-h-0">
-        {/* Left Panel: Waypoint List */}
-        <aside className="w-[280px] flex-shrink-0 bg-[#111827] rounded-lg overflow-hidden">
+  {/* Left Panel: Waypoint List */}
+  <aside className="w-[240px] flex-shrink-0 bg-[#111827] rounded-lg overflow-hidden" style={{height: '98%'}}>
           <WaypointStatusList
             waypoints={missionWaypoints}
             activeWaypointId={activeWaypointId}
@@ -62,7 +109,7 @@ const LiveReportView: React.FC<LiveReportViewProps> = ({
         </aside>
 
         {/* Center Panel: Map View */}
-        <main className="flex-1 flex flex-col min-h-0">
+        <main className="flex-1 flex flex-col min-h-0" style={{height: '98%'}}>
           <MapView
             missionWaypoints={missionWaypoints}
             onMapClick={() => {}}
@@ -85,20 +132,21 @@ const LiveReportView: React.FC<LiveReportViewProps> = ({
         </main>
 
         {/* Right Panel: Controls */}
-        <aside className="w-[220px] flex-shrink-0">
+  <aside className="w-[200px] flex-shrink-0" style={{height: '98%'}}>
           <LiveControls 
             isConnected={isConnected}
             currentWaypoint={currentWaypointSeq}
+            wpMarkStatus={wpMarkStatus}
           />
         </aside>
       </div>
 
-  {/* Bottom Panel: Status Bar */}
-      <footer className="h-40 flex-shrink-0">
+      <footer className="h-60 flex-shrink-0">
         <LiveStatusbar 
             missionName={missionName}
             waypoints={missionWaypoints}
             liveRoverData={displayRoverData}
+            wpMarkStatus={wpMarkStatus}
         />
       </footer>
     </div>
