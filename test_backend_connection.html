@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Backend Connection Test - Complete</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            padding: 20px; 
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: white; 
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 { 
+            color: #60a5fa; 
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #94a3b8;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .config {
+            background: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .config h2 {
+            color: #22c55e;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .config-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .config-label {
+            color: #94a3b8;
+            min-width: 150px;
+            font-size: 13px;
+        }
+        .config-value {
+            color: #f1f5f9;
+            font-family: 'Courier New', monospace;
+            background: #0f172a;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .test-card {
+            background: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            transition: all 0.3s;
+        }
+        .test-card:hover {
+            border-color: #60a5fa;
+            box-shadow: 0 4px 12px rgba(96, 165, 250, 0.2);
+        }
+        .test-card h3 {
+            color: #60a5fa;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        button { 
+            padding: 12px 24px; 
+            margin: 5px; 
+            cursor: pointer; 
+            background: #3b82f6; 
+            border: none; 
+            border-radius: 6px; 
+            color: white; 
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        button:hover { 
+            background: #2563eb; 
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            background: #475569;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .result { 
+            background: #0f172a; 
+            padding: 15px; 
+            border-radius: 6px; 
+            margin-top: 15px; 
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #334155;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        .status.pending { background: #451a03; color: #fbbf24; }
+        .status.testing { background: #1e3a8a; color: #60a5fa; }
+        .status.success { background: #14532d; color: #22c55e; }
+        .status.error { background: #7f1d1d; color: #ef4444; }
+        .error { color: #ef4444; }
+        .success { color: #22c55e; }
+        .warning { color: #fbbf24; }
+        .info { color: #60a5fa; }
+        #overallStatus {
+            background: #1e293b;
+            border: 3px solid #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        #overallStatus h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        .controls {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .controls button {
+            font-size: 16px;
+            padding: 14px 32px;
+        }
+        .download-btn {
+            background: #059669;
+        }
+        .download-btn:hover {
+            background: #047857;
+        }
+        .download-section {
+            text-align: center;
+            margin-top: 20px;
+            padding: 15px;
+            background: #1e293b;
+            border-radius: 8px;
+            border: 2px solid #334155;
+        }
+        .download-section h3 {
+            color: #22c55e;
+            margin-bottom: 15px;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Backend Connection Test Suite</h1>
+        <p class="subtitle">Complete diagnostic tool for frontend-backend communication</p>
+
+        <div class="config">
+            <h2>⚙️ Configuration</h2>
+            <div class="config-item">
+                <span class="config-label">Backend URL:</span>
+                <span class="config-value" id="backendUrl">http://192.168.1.100:5001</span>
+            </div>
+            <div class="config-item">
+                <span class="config-label">Test Time:</span>
+                <span class="config-value" id="testTime">-</span>
+            </div>
+        </div>
+
+        <div id="overallStatus">
+            <h2>Overall Status</h2>
+            <div class="status pending" id="overallStatusBadge">⏳ Not Started</div>
+        </div>
+
+        <div class="controls">
+            <button onclick="runAllTests()" id="runAllBtn">▶️ Run All Tests</button>
+            <button onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
+
+        <div class="download-section">
+            <h3>📥 Download Test Report</h3>
+            <button onclick="downloadCSV()" class="download-btn">📊 Download CSV</button>
+            <button onclick="downloadPDF()" class="download-btn">📄 Download PDF</button>
+        </div>
+
+        <div class="test-grid">
+            <!-- Test 1: Backend Root -->
+            <div class="test-card">
+                <h3>1. Backend Root Endpoint</h3>
+                <button onclick="testBackendRoot()">Test /</button>
+                <div class="result" id="result1">Click button to test...</div>
+            </div>
+
+            <!-- Test 2: Health Check -->
+            <div class="test-card">
+                <h3>2. Health Check API</h3>
+                <button onclick="testHealthCheck()">Test /api/health</button>
+                <div class="result" id="result2">Click button to test...</div>
+            </div>
+
+            <!-- Test 3: Servo Status -->
+            <div class="test-card">
+                <h3>3. Servo Status</h3>
+                <button onclick="testServoStatus()">Test /servo/status</button>
+                <div class="result" id="result3">Click button to test...</div>
+            </div>
+
+            <!-- Test 4: Servo Control -->
+            <div class="test-card">
+                <h3>4. Servo Control</h3>
+                <button onclick="testServoControl()">Test /api/servo/control</button>
+                <div class="result" id="result4">Click button to test...</div>
+            </div>
+
+            <!-- Test 5: RTK Status -->
+            <div class="test-card">
+                <h3>5. RTK Status</h3>
+                <button onclick="testRtkStatus()">Test /api/rtk/status</button>
+                <div class="result" id="result5">Click button to test...</div>
+            </div>
+
+            <!-- Test 6: CORS Headers -->
+            <div class="test-card">
+                <h3>6. CORS Configuration</h3>
+                <button onclick="testCORS()">Test CORS Headers</button>
+                <div class="result" id="result6">Click button to test...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = 'http://192.168.1.29:5001';
+        let testResults = {
+            total: 0,
+            passed: 0,
+            failed: 0
+        };
+        let testLog = []; // Store detailed test results
+
+        document.getElementById('backendUrl').textContent = BACKEND_URL;
+
+        function updateTestTime() {
+            const now = new Date();
+            document.getElementById('testTime').textContent = now.toLocaleString();
+        }
+
+        function updateOverallStatus() {
+            const badge = document.getElementById('overallStatusBadge');
+            const total = testResults.total;
+            const passed = testResults.passed;
+            const failed = testResults.failed;
+
+            if (total === 0) {
+                badge.className = 'status pending';
+                badge.textContent = '⏳ Not Started';
+            } else if (failed === 0 && passed === total) {
+                badge.className = 'status success';
+                badge.textContent = `✅ All Tests Passed (${passed}/${total})`;
+            } else if (failed > 0) {
+                badge.className = 'status error';
+                badge.textContent = `❌ ${failed} Failed, ${passed} Passed (${total} total)`;
+            } else {
+                badge.className = 'status testing';
+                badge.textContent = `⏳ Testing... (${passed}/${total})`;
+            }
+        }
+
+        function recordResult(success) {
+            testResults.total++;
+            if (success) {
+                testResults.passed++;
+            } else {
+                testResults.failed++;
+            }
+            updateOverallStatus();
+        }
+
+        function logTest(testName, endpoint, status, message, details = {}) {
+            testLog.push({
+                timestamp: new Date().toISOString(),
+                testName,
+                endpoint,
+                status,
+                message,
+                details
+            });
+        }
+
+        async function testBackendRoot() {
+            const resultDiv = document.getElementById('result1');
+            resultDiv.textContent = '⏳ Testing backend root endpoint...';
+            
+            try {
+                const startTime = performance.now();
+                const response = await fetch(`${BACKEND_URL}/`);
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(2);
+                
+                const text = await response.text();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ SUCCESS (${duration}ms)\n\nStatus: ${response.status} ${response.statusText}\nContent: ${text.substring(0, 200)}${text.length > 200 ? '...' : ''}`;
+                    logTest('Backend Root Endpoint', '/', 'PASSED', `Connection successful (${duration}ms). Status: ${response.status}`, { responseTime: `${duration}ms`, status: response.status });
+                    recordResult(true);
+                } else {
+                    resultDiv.className = 'result warning';
+                    resultDiv.textContent = `⚠️ REACHABLE BUT ERROR\n\nStatus: ${response.status} ${response.statusText}\nResponse: ${text}`;
+                    logTest('Backend Root Endpoint', '/', 'FAILED', `HTTP Error ${response.status}: ${response.statusText}`, { status: response.status });
+                    recordResult(false);
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ FAILED\n\nError: ${error.message}\nType: ${error.name}\n\nPossible causes:\n- Backend server not running\n- Network/Firewall blocking connection\n- Wrong IP address/port`;
+                logTest('Backend Root Endpoint', '/', 'FAILED', `Connection failed: ${error.message}`, { error: error.name });
+                recordResult(false);
+            }
+        }
+
+        async function testHealthCheck() {
+            const resultDiv = document.getElementById('result2');
+            resultDiv.textContent = '⏳ Testing health check endpoint...';
+            
+            try {
+                const startTime = performance.now();
+                const response = await fetch(`${BACKEND_URL}/api/health`);
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(2);
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ SUCCESS (${duration}ms)\n\nStatus: ${response.status}\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                    logTest('Health Check API', '/api/health', 'PASSED', `Health check successful (${duration}ms). Status: ${data.status || 'healthy'}`, { responseTime: `${duration}ms`, services: JSON.stringify(data.services || {}) });
+                    recordResult(true);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ FAILED\n\nStatus: ${response.status}\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                    logTest('Health Check API', '/api/health', 'FAILED', `HTTP Error ${response.status}`, { status: response.status });
+                    recordResult(false);
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ FAILED\n\nError: ${error.message}\n\nThis endpoint should return server health status.`;
+                logTest('Health Check API', '/api/health', 'FAILED', `Request failed: ${error.message}`, { error: error.name });
+                recordResult(false);
+            }
+        }
+
+        async function testServoStatus() {
+            const resultDiv = document.getElementById('result3');
+            resultDiv.textContent = '⏳ Testing servo status endpoint...';
+            
+            try {
+                const startTime = performance.now();
+                const response = await fetch(`${BACKEND_URL}/servo/status`);
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(2);
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ SUCCESS (${duration}ms)\n\nStatus: ${response.status}\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                    logTest('Servo Status', '/servo/status', 'PASSED', `Servo status retrieved successfully (${duration}ms)`, { responseTime: `${duration}ms` });
+                    recordResult(true);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ FAILED\n\nStatus: ${response.status}\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                    logTest('Servo Status', '/servo/status', 'FAILED', `HTTP Error ${response.status}`, { status: response.status });
+                    recordResult(false);
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ FAILED\n\nError: ${error.message}`;
+                logTest('Servo Status', '/servo/status', 'FAILED', `Request failed: ${error.message}`, { error: error.name });
+                recordResult(false);
+            }
+        }
+
+        async function testServoControl() {
+            const resultDiv = document.getElementById('result4');
+            resultDiv.textContent = '⏳ Testing servo control endpoint...';
+            
+            try {
+                const startTime = performance.now();
+                const response = await fetch(`${BACKEND_URL}/api/servo/control`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        servo_id: 10,
+                        angle: 90
+                    })
+                });
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(2);
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ SUCCESS (${duration}ms)\n\nStatus: ${response.status}\nCommand sent: Servo 10 → 90°\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                    logTest('Servo Control POST', '/api/servo/control', 'PASSED', `Servo command successful (${duration}ms). Servo 10 set to 90°`, { responseTime: `${duration}ms`, pwm: data.pwm });
+                    recordResult(true);
+                } else {
+                    resultDiv.className = 'result warning';
+                    resultDiv.textContent = `⚠️ ENDPOINT WORKS BUT COMMAND FAILED\n\nStatus: ${response.status}\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                    logTest('Servo Control POST', '/api/servo/control', 'FAILED', `Command failed. Status: ${response.status}`, { status: response.status });
+                    recordResult(false);
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ FAILED\n\nError: ${error.message}`;
+                logTest('Servo Control POST', '/api/servo/control', 'FAILED', `Request failed: ${error.message}`, { error: error.name });
+                recordResult(false);
+            }
+        }
+
+        async function testRtkStatus() {
+            const resultDiv = document.getElementById('result5');
+            resultDiv.textContent = '⏳ Testing RTK status endpoint...';
+            
+            try {
+                const startTime = performance.now();
+                const response = await fetch(`${BACKEND_URL}/api/rtk/status`);
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(2);
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ SUCCESS (${duration}ms)\n\nStatus: ${response.status}\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                    logTest('RTK Status', '/api/rtk/status', 'PASSED', `RTK status retrieved successfully (${duration}ms)`, { responseTime: `${duration}ms`, running: data.running });
+                    recordResult(true);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ FAILED\n\nStatus: ${response.status}\nResponse:\n${JSON.stringify(data, null, 2)}`;
+                    logTest('RTK Status', '/api/rtk/status', 'FAILED', `HTTP Error ${response.status}`, { status: response.status });
+                    recordResult(false);
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ FAILED\n\nError: ${error.message}`;
+                logTest('RTK Status', '/api/rtk/status', 'FAILED', `Request failed: ${error.message}`, { error: error.name });
+                recordResult(false);
+            }
+        }
+
+        async function testCORS() {
+            const resultDiv = document.getElementById('result6');
+            resultDiv.textContent = '⏳ Testing CORS headers...';
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/health`, {
+                    method: 'OPTIONS',
+                });
+                
+                const corsHeaders = {
+                    'Access-Control-Allow-Origin': response.headers.get('Access-Control-Allow-Origin'),
+                    'Access-Control-Allow-Methods': response.headers.get('Access-Control-Allow-Methods'),
+                    'Access-Control-Allow-Headers': response.headers.get('Access-Control-Allow-Headers'),
+                    'Access-Control-Allow-Credentials': response.headers.get('Access-Control-Allow-Credentials'),
+                };
+                
+                const hasValidCORS = corsHeaders['Access-Control-Allow-Origin'] !== null;
+                
+                if (hasValidCORS) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ CORS CONFIGURED\n\nHeaders:\n${JSON.stringify(corsHeaders, null, 2)}`;
+                    logTest('CORS Configuration', '/api/health (OPTIONS)', 'PASSED', `CORS headers properly configured`, { origin: corsHeaders['Access-Control-Allow-Origin'] });
+                    recordResult(true);
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ CORS NOT CONFIGURED\n\nNo CORS headers found. This will cause issues with frontend requests.`;
+                    logTest('CORS Configuration', '/api/health (OPTIONS)', 'FAILED', `CORS headers not configured`, {});
+                    recordResult(false);
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ FAILED\n\nError: ${error.message}`;
+                logTest('CORS Configuration', '/api/health (OPTIONS)', 'FAILED', `Request failed: ${error.message}`, { error: error.name });
+                recordResult(false);
+            }
+        }
+
+        async function runAllTests() {
+            const btn = document.getElementById('runAllBtn');
+            btn.disabled = true;
+            btn.textContent = '⏳ Running Tests...';
+            
+            testResults = { total: 0, passed: 0, failed: 0 };
+            updateTestTime();
+            updateOverallStatus();
+
+            await testBackendRoot();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testHealthCheck();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testServoStatus();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testServoControl();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testRtkStatus();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testCORS();
+            
+            btn.disabled = false;
+            btn.textContent = '▶️ Run All Tests';
+        }
+
+        function clearResults() {
+            for (let i = 1; i <= 6; i++) {
+                const resultDiv = document.getElementById(`result${i}`);
+                resultDiv.textContent = 'Click button to test...';
+                resultDiv.className = 'result';
+            }
+            testResults = { total: 0, passed: 0, failed: 0 };
+            testLog = [];
+            updateOverallStatus();
+        }
+
+        // Download CSV Report
+        function downloadCSV() {
+            if (testLog.length === 0) {
+                alert('Please run tests first before downloading the report!');
+                return;
+            }
+
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+            const csvRows = [];
+            
+            // Header
+            csvRows.push('Backend Connection Test Report');
+            csvRows.push(`Generated: ${new Date().toLocaleString()}`);
+            csvRows.push(`Backend URL: ${BACKEND_URL}`);
+            csvRows.push('');
+            csvRows.push('Test Summary');
+            csvRows.push(`Total Tests: ${testResults.total}`);
+            csvRows.push(`Passed: ${testResults.passed}`);
+            csvRows.push(`Failed: ${testResults.failed}`);
+            csvRows.push(`Success Rate: ${testResults.total > 0 ? ((testResults.passed / testResults.total) * 100).toFixed(2) : 0}%`);
+            csvRows.push('');
+            
+            // Detailed Results Header
+            csvRows.push('Test Name,Endpoint,Status,Message,Timestamp,Response Time');
+            
+            // Test Details
+            testLog.forEach(log => {
+                const row = [
+                    `"${log.testName}"`,
+                    `"${log.endpoint}"`,
+                    log.status,
+                    `"${log.message}"`,
+                    log.timestamp,
+                    log.details.responseTime || 'N/A'
+                ].join(',');
+                csvRows.push(row);
+            });
+
+            const csvContent = csvRows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `backend-test-report-${timestamp}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Download PDF Report
+        function downloadPDF() {
+            if (testLog.length === 0) {
+                alert('Please run tests first before downloading the report!');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('p', 'mm', 'a4');
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+            
+            let yPos = 20;
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const margin = 15;
+            const contentWidth = pageWidth - (2 * margin);
+
+            // Title
+            doc.setFontSize(20);
+            doc.setTextColor(37, 99, 235); // Blue
+            doc.text('Backend Connection Test Report', margin, yPos);
+            yPos += 10;
+
+            // Subtitle
+            doc.setFontSize(10);
+            doc.setTextColor(100, 100, 100);
+            doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPos);
+            yPos += 5;
+            doc.text(`Backend URL: ${BACKEND_URL}`, margin, yPos);
+            yPos += 10;
+
+            // Summary Box
+            doc.setFillColor(240, 240, 240);
+            doc.rect(margin, yPos, contentWidth, 35, 'F');
+            yPos += 8;
+
+            doc.setFontSize(14);
+            doc.setTextColor(0, 0, 0);
+            doc.text('Test Summary', margin + 5, yPos);
+            yPos += 8;
+
+            doc.setFontSize(11);
+            doc.text(`Total Tests: ${testResults.total}`, margin + 5, yPos);
+            yPos += 6;
+            
+            // Success count in green
+            doc.setTextColor(34, 197, 94);
+            doc.text(`✓ Passed: ${testResults.passed}`, margin + 5, yPos);
+            yPos += 6;
+            
+            // Failed count in red
+            doc.setTextColor(239, 68, 68);
+            doc.text(`✗ Failed: ${testResults.failed}`, margin + 5, yPos);
+            yPos += 6;
+            
+            // Success rate
+            const successRate = testResults.total > 0 ? ((testResults.passed / testResults.total) * 100).toFixed(2) : 0;
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Success Rate: ${successRate}%`, margin + 5, yPos);
+            yPos += 12;
+
+            // Detailed Results Header
+            doc.setFontSize(14);
+            doc.setTextColor(37, 99, 235);
+            doc.text('Detailed Test Results', margin, yPos);
+            yPos += 8;
+
+            // Table Header
+            doc.setFillColor(59, 130, 246);
+            doc.rect(margin, yPos - 5, contentWidth, 8, 'F');
+            doc.setFontSize(10);
+            doc.setTextColor(255, 255, 255);
+            doc.text('Test Name', margin + 2, yPos);
+            doc.text('Status', margin + 80, yPos);
+            doc.text('Time', margin + 110, yPos);
+            yPos += 8;
+
+            // Test Results
+            doc.setFontSize(9);
+            testLog.forEach((log, index) => {
+                // Check if we need a new page
+                if (yPos > 270) {
+                    doc.addPage();
+                    yPos = 20;
+                }
+
+                // Alternating row colors
+                if (index % 2 === 0) {
+                    doc.setFillColor(250, 250, 250);
+                    doc.rect(margin, yPos - 4, contentWidth, 6, 'F');
+                }
+
+                // Test name
+                doc.setTextColor(0, 0, 0);
+                const testNameShort = log.testName.length > 35 ? log.testName.substring(0, 32) + '...' : log.testName;
+                doc.text(testNameShort, margin + 2, yPos);
+
+                // Status with color
+                if (log.status === 'PASSED') {
+                    doc.setTextColor(34, 197, 94); // Green
+                    doc.text('✓ PASSED', margin + 80, yPos);
+                } else {
+                    doc.setTextColor(239, 68, 68); // Red
+                    doc.text('✗ FAILED', margin + 80, yPos);
+                }
+
+                // Timestamp
+                doc.setTextColor(100, 100, 100);
+                const timeStr = new Date(log.timestamp).toLocaleTimeString();
+                doc.text(timeStr, margin + 110, yPos);
+
+                yPos += 6;
+
+                // Message/Details (indented)
+                doc.setTextColor(60, 60, 60);
+                doc.setFontSize(8);
+                const messageLines = doc.splitTextToSize(log.message, contentWidth - 10);
+                messageLines.forEach(line => {
+                    if (yPos > 280) {
+                        doc.addPage();
+                        yPos = 20;
+                    }
+                    doc.text(line, margin + 5, yPos);
+                    yPos += 4;
+                });
+                
+                doc.setFontSize(9);
+                yPos += 4;
+            });
+
+            // Footer
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150, 150, 150);
+                doc.text(
+                    `Page ${i} of ${pageCount}`,
+                    pageWidth / 2,
+                    doc.internal.pageSize.getHeight() - 10,
+                    { align: 'center' }
+                );
+            }
+
+            // Save PDF
+            doc.save(`backend-test-report-${timestamp}.pdf`);
+        }
+
+        // Auto-run on load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                console.log('Auto-running tests in 2 seconds...');
+                setTimeout(runAllTests, 2000);
+            }, 100);
+        });
+    </script>
+</body>
+</html>

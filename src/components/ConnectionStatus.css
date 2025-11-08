@@ -1,0 +1,173 @@
+/* Connection Status Indicator */
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: opacity 0.2s ease;
+}
+
+.connection-status:hover {
+  opacity: 0.8;
+}
+
+.connection-status:active {
+  opacity: 0.6;
+}
+
+/* Status Indicator Container */
+.status-indicator {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Status Dot */
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  box-shadow: 0 0 0 0 currentColor;
+}
+
+/* Pulse Animation for Checking Status */
+.status-pulse {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* Status Colors */
+.status-connected {
+  color: #22c55e; /* Green */
+}
+
+.status-connected .status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.4);
+}
+
+.status-degraded {
+  color: #eab308; /* Yellow */
+}
+
+.status-degraded .status-dot {
+  background: #eab308;
+  box-shadow: 0 0 4px rgba(234, 179, 8, 0.4);
+  animation: blink 2s ease-in-out infinite;
+}
+
+.status-disconnected {
+  color: #ef4444; /* Red */
+}
+
+.status-disconnected .status-dot {
+  background: #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+}
+
+.status-checking {
+  color: #3b82f6; /* Blue */
+}
+
+.status-checking .status-dot {
+  background: #3b82f6;
+  box-shadow: 0 0 4px rgba(59, 130, 246, 0.4);
+}
+
+.status-unknown {
+  color: #6b7280; /* Gray */
+}
+
+.status-unknown .status-dot {
+  background: #6b7280;
+}
+
+/* Blink Animation for Degraded Status */
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Status Label */
+.status-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: currentColor;
+  white-space: nowrap;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .status-connected .status-dot {
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+  }
+  
+  .status-degraded .status-dot {
+    box-shadow: 0 0 6px rgba(234, 179, 8, 0.6);
+  }
+  
+  .status-disconnected .status-dot {
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+  }
+  
+  .status-checking .status-dot {
+    box-shadow: 0 0 6px rgba(59, 130, 246, 0.6);
+  }
+}
+
+/* Accessibility - High Contrast Mode */
+@media (prefers-contrast: high) {
+  .status-dot {
+    border: 2px solid currentColor;
+  }
+  
+  .status-label {
+    font-weight: 600;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .status-pulse {
+    animation: none;
+  }
+  
+  .status-degraded .status-dot {
+    animation: none;
+    opacity: 0.8;
+  }
+  
+  .status-dot,
+  .connection-status {
+    transition: none;
+  }
+}

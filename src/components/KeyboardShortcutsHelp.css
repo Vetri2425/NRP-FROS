@@ -1,0 +1,231 @@
+/* Keyboard Shortcuts Help Modal */
+.shortcuts-help-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.shortcuts-help-modal {
+  background: #1f2937;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.shortcuts-help-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #374151;
+}
+
+.shortcuts-help-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #f3f4f6;
+}
+
+.shortcuts-help-close {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: color 0.2s ease;
+  border-radius: 4px;
+}
+
+.shortcuts-help-close:hover {
+  color: #f3f4f6;
+  background: #374151;
+}
+
+.shortcuts-help-content {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.shortcuts-help-empty {
+  text-align: center;
+  color: #9ca3af;
+  padding: 40px 20px;
+  font-size: 14px;
+}
+
+.shortcuts-help-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.shortcuts-help-table thead {
+  border-bottom: 2px solid #374151;
+}
+
+.shortcuts-help-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.shortcuts-help-table tbody tr {
+  border-bottom: 1px solid #374151;
+  transition: background 0.15s ease;
+}
+
+.shortcuts-help-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.shortcuts-help-table tbody tr:hover {
+  background: #374151;
+}
+
+.shortcuts-help-table td {
+  padding: 14px 16px;
+  color: #f3f4f6;
+  font-size: 14px;
+}
+
+.shortcuts-help-table td:first-child {
+  width: 180px;
+}
+
+.shortcuts-help-kbd,
+kbd {
+  display: inline-block;
+  padding: 4px 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #f3f4f6;
+  background: #374151;
+  border: 1px solid #4b5563;
+  border-radius: 4px;
+  box-shadow: 0 2px 0 #1f2937, 0 2px 4px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
+.shortcuts-help-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #374151;
+  background: #111827;
+  border-radius: 0 0 12px 12px;
+}
+
+.shortcuts-help-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* Scrollbar styling */
+.shortcuts-help-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.shortcuts-help-content::-webkit-scrollbar-track {
+  background: #1f2937;
+}
+
+.shortcuts-help-content::-webkit-scrollbar-thumb {
+  background: #4b5563;
+  border-radius: 4px;
+}
+
+.shortcuts-help-content::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .shortcuts-help-modal {
+    width: 95%;
+    max-height: 90vh;
+  }
+
+  .shortcuts-help-header {
+    padding: 16px 20px;
+  }
+
+  .shortcuts-help-header h2 {
+    font-size: 18px;
+  }
+
+  .shortcuts-help-content {
+    padding: 20px;
+  }
+
+  .shortcuts-help-table th,
+  .shortcuts-help-table td {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .shortcuts-help-table td:first-child {
+    width: 140px;
+  }
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+  .shortcuts-help-modal {
+    border: 2px solid #f3f4f6;
+  }
+
+  .shortcuts-help-kbd,
+  kbd {
+    border: 2px solid #f3f4f6;
+  }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  .shortcuts-help-overlay,
+  .shortcuts-help-modal {
+    animation: none;
+  }
+}

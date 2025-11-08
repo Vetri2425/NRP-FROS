@@ -1,0 +1,60 @@
+# ROVER GPS DIAGNOSTICS - Run these commands in SSH session
+# Connect: ssh flash@192.168.1.101
+
+# ==============================================
+# STEP 1: Setup ROS Environment
+# ==============================================
+source /opt/ros/noetic/setup.bash
+source ~/catkin_ws/devel/setup.bash
+
+# ==============================================
+# STEP 2: List all GPS-related topics
+# ==============================================
+echo "=== GPS Topics ==="
+rostopic list | grep -E "gps|global_position"
+
+# ==============================================
+# STEP 3: Check GPS1 Raw (satellites, fix type)
+# ==============================================
+echo "=== GPS1 Raw Data ==="
+rostopic echo -n 1 /mavros/gpsstatus/gps1/raw
+
+# ==============================================
+# STEP 4: Check Global Position (lat/lon/alt)
+# ==============================================
+echo "=== Global Position ==="
+rostopic echo -n 1 /mavros/global_position/global
+
+# ==============================================
+# STEP 5: Check publication rates
+# ==============================================
+echo "=== GPS1 Raw Rate ==="
+timeout 5s rostopic hz /mavros/gpsstatus/gps1/raw
+
+echo "=== Global Position Rate ==="
+timeout 5s rostopic hz /mavros/global_position/global
+
+# ==============================================
+# STEP 6: Check telemetry node
+# ==============================================
+echo "=== Telemetry Nodes ==="
+rosnode list | grep telemetry
+
+# ==============================================
+# STEP 7: Check telemetry node subscriptions
+# ==============================================
+echo "=== Telemetry Node Info ==="
+rosnode info /telemetry_node
+
+# ==============================================
+# STEP 8: Check MAVROS connection
+# ==============================================
+echo "=== MAVROS State ==="
+rostopic echo -n 1 /mavros/state
+
+# ==============================================
+# STEP 9: Compare with MAVProxy
+# ==============================================
+# Run in separate terminal:
+# mavproxy.py --master=/dev/ttyACM0:57600
+# Then type: gps
