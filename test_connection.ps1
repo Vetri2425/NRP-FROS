@@ -1,7 +1,7 @@
 # Backend Connection Test Script
 # Tests connectivity between frontend and backend server
 
-$BACKEND_IP = "192.168.1.29"
+$BACKEND_IP = "192.168.1.101"
 $BACKEND_PORT = 5001
 $BACKEND_URL = "http://${BACKEND_IP}:${BACKEND_PORT}"
 

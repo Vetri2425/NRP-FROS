@@ -59,8 +59,8 @@ export function useConnectionHealth(options: UseConnectionHealthOptions = {}) {
 
     try {
       // Use a lightweight endpoint for health checks
-      // Try /api/status first, fallback to base URL
-      const response = await fetch(`${BACKEND_URL}/api/status`, {
+      // Try /api/health first, fallback to base URL
+      const response = await fetch(`${BACKEND_URL}/api/health`, {
         method: 'GET',
         signal: controller.signal,
         headers: {

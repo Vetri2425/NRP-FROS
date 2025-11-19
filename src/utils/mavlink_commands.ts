@@ -14,6 +14,7 @@ export const MAV_CMD = {
   DO_JUMP: 177,
   DO_CHANGE_SPEED: 178,
   DO_SET_HOME: 179,
+  DO_DELAY: 180,
   DO_SET_SERVO: 183,
   DO_SET_RELAY: 181,
   DO_REPEAT_RELAY: 182,
@@ -94,6 +95,15 @@ export const COMMAND_DEFINITIONS: Record<number, CommandDefinition> = {
       param1: 'Speed type (0=airspeed, 1=groundspeed)',
       param2: 'Speed (m/s)',
       param3: 'Throttle (%)',
+    },
+  },
+  [MAV_CMD.DO_DELAY]: {
+    id: 180,
+    name: 'DO_DELAY',
+    description: 'Delay execution',
+    category: 'do',
+    params: {
+      param1: 'Delay (s)',
     },
   },
   [MAV_CMD.DO_SET_SERVO]: {

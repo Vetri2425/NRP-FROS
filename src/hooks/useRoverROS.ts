@@ -470,6 +470,18 @@ export interface RoverServices {
   stopRTK: () => Promise<ServiceResponse>;
   getRTKStatus: () => Promise<ServiceResponse & { running?: boolean; caster?: any; total_bytes?: number }>;
   controlServo: (servoId: number, angle: number) => Promise<ServiceResponse>;
+  
+  // Mission Controller Operations (Jetson)
+  loadMissionToController: (waypoints: Waypoint[], servoConfig?: any) => Promise<ServiceResponse>;
+  startMissionController: () => Promise<ServiceResponse>;
+  stopMissionController: () => Promise<ServiceResponse>;
+  restartMissionController: () => Promise<ServiceResponse>;
+  nextWaypoint: () => Promise<ServiceResponse>;
+  
+  // Configuration
+  getMissionConfig: () => Promise<ServiceResponse>;
+  getSprayerConfig: () => Promise<ServiceResponse>;
+  saveSprayerConfig: (config: any) => Promise<ServiceResponse>;
 }
 
 export interface UseRoverROSResult {
@@ -784,6 +796,82 @@ export function useRoverROS(): UseRoverROSResult {
           }
         });
 
+        // Provide a snapshot of mission logs (history)
+        socket.on('mission_logs_snapshot', (data: any) => {
+          console.log('Received mission_logs_snapshot:', data);
+          if (missionEventCallbackRef.current) {
+            // Forward snapshot to the mission event callback so UI can populate logs
+            missionEventCallbackRef.current(data as MissionEventData);
+          }
+        });
+
+        // Server-wide activity events (filter for mission/servo related activity)
+        socket.on('server_activity', (activity: any) => {
+          try {
+            if (!activity) return;
+            const ev = activity as any;
+            if (ev.event === 'mission' || ev.event === 'servo') {
+              console.log('Received server_activity (mission/servo):', ev);
+              if (missionEventCallbackRef.current) {
+                missionEventCallbackRef.current(ev as MissionEventData);
+              }
+            }
+          } catch (err) {
+            console.error('Error handling server_activity:', err);
+          }
+        });
+
+        // Mission controller status updates (real-time from mission controller node)
+        socket.on('mission_status', (data: any) => {
+          console.log('[Mission Status Update]', data);
+          // Forward the server-provided status object directly to the mission
+          // event callback. The backend emits a flat object (base payload +
+          // any extra_data merged in), and UI handlers expect fields like
+          // `message`, `event_type`, `waypoint_id`, etc. Previously this
+          // wrapper nested the payload under `data` which prevented callers
+          // from accessing those top-level keys. Forwarding the payload
+          // directly keeps the shape consistent with the server.
+          if (missionEventCallbackRef.current) {
+            try {
+              missionEventCallbackRef.current(data as any);
+            } catch (err) {
+              console.error('Error in mission_status handler callback:', err);
+            }
+          }
+        });
+
+        // Mission controller errors
+        socket.on('mission_error', (data: { error: string }) => {
+          console.error('[Mission Error]', data.error);
+          if (missionEventCallbackRef.current) {
+            missionEventCallbackRef.current({
+              type: 'mission_error',
+              message: data.error,
+              timestamp: Date.now(),
+            } as any);
+          }
+        });
+
+        // Mission command acknowledgments
+        socket.on('mission_command_ack', (data: { status: string; command: string }) => {
+          console.log('[Mission Command ACK]', data);
+          if (missionEventCallbackRef.current) {
+            missionEventCallbackRef.current({
+              type: 'mission_command_ack',
+              message: `Command ${data.command} ${data.status}`,
+              timestamp: Date.now(),
+            } as any);
+          }
+        });
+
+        // Mission controller node status
+        socket.on('mission_controller_status', (data: { running: boolean; error?: string }) => {
+          console.log('[Mission Controller Status]', data);
+          if (data.error) {
+            console.error('[Mission Controller Error]', data.error);
+          }
+        });
+
         socket.connect();
 
         const pingInterval = setInterval(() => {
@@ -901,6 +989,26 @@ const services = useMemo<RoverServices>(
     getRTKStatus: () => getService('/rtk/status'),
     controlServo: (servoId: number, angle: number) =>
       postService('/servo/control', { servo_id: servoId, angle }),
+    
+    // Mission Controller Operations (Jetson)
+    loadMissionToController: (waypoints: Waypoint[], servoConfig?: any) =>
+      postService('/mission/load', { waypoints, servoConfig }),
+    
+    startMissionController: () => postService('/mission/start'),
+    
+    stopMissionController: () => postService('/mission/stop'),
+    
+    restartMissionController: () => postService('/mission/restart'),
+    
+    nextWaypoint: () => postService('/mission/next'),
+    
+    // Configuration
+    getMissionConfig: () => getService('/mission/config'),
+    
+    getSprayerConfig: () => getService('/config/sprayer'),
+    
+    saveSprayerConfig: (config: any) =>
+      postService('/config/sprayer', config),
   }),
   [pushStatePatch],
 );

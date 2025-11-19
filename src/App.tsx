@@ -6,9 +6,9 @@ import MapView from './components/MapView';
 import PlanControls from './components/plan/PlanControls';
 import QGCWaypointTable from './components/plan/QGCWaypointTable';
 import LiveReportView from './components/live/LiveReportView';
+import { SprayerReportView } from './components/sprayer';
 import MissionLogs from './components/MissionLogs';
 import SetupTab from './components/setup/SetupTab';
-import ServoControlTab from './components/ServoControl/ServoControlTab';
 import { MissionFileInfo, Waypoint, ViewMode, RoverData } from './types';
 import { usePersistentState } from './hooks/usePersistentState';
 import { useMissionLogs } from './hooks/useMissionLogs';
@@ -202,6 +202,7 @@ const AppContent: React.FC = () => {
     undo,
     redo,
     pushSnapshot,
+  // import SprayerTab from './components/SprayerTab';
     clearHistory,
     getHistorySize
   } = useMissionHistory(20);
@@ -742,12 +743,6 @@ const AppContent: React.FC = () => {
 
   const renderMainContent = () => {
     switch (viewMode) {
-      case 'servo':
-        return (
-          <main className="flex-1 flex p-3 overflow-hidden min-h-0">
-            <ServoControlTab />
-          </main>
-        );
       case 'planning':
         return (
           <main className="flex-1 flex p-3 gap-3 overflow-hidden min-h-0">
@@ -836,6 +831,22 @@ const AppContent: React.FC = () => {
               setIsLiveReportCleared(true);
 
               console.log('[App] Cleared all mission data');
+            }}
+          />
+        );
+      case 'sprayer':
+        return (
+          <SprayerReportView
+            missionWaypoints={missionWaypoints}
+            liveRoverData={uiRoverData}
+            missionName={currentMissionFileName}
+            isConnected={isConnectedToRover}
+            onClearAll={async () => {
+              // Sprayer-specific clear logic
+              clearLogs();
+              setMissionWaypoints([]);
+              setIsLiveReportCleared(true);
+              console.log('[App] Cleared all sprayer mission data');
             }}
           />
         );

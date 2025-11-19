@@ -15,6 +15,11 @@ type PlanActionsProps = {
   lastReadStatus: null | 'success' | 'error' | 'empty';
   readErrorMessage: string | null;
 
+  // Jetson upload props
+  onUploadToJetson: () => Promise<void>;
+  isUploadingToJetson: boolean;
+  lastJetsonUploadStatus: null | 'success' | 'error';
+
   // Home location props
   homePosition?: { lat: number; lng: number; alt?: number } | null;
   onStartSetHome?: () => void;
@@ -31,6 +36,9 @@ const PlanActions: React.FC<PlanActionsProps> = ({
   isReading,
   lastReadStatus,
   readErrorMessage,
+  onUploadToJetson,
+  isUploadingToJetson,
+  lastJetsonUploadStatus,
   homePosition,
   onStartSetHome,
 }) => {
@@ -117,6 +125,28 @@ const PlanActions: React.FC<PlanActionsProps> = ({
               ></div>
             </div>
           )}
+
+          <button
+            onClick={onUploadToJetson}
+            disabled={missionWaypoints.length === 0 || isUploadingToJetson}
+            className={`w-full px-3 py-1.5 rounded-md transition-all duration-200 text-xs font-medium mt-1.5 ${
+              missionWaypoints.length > 0 && !isUploadingToJetson
+                ? lastJetsonUploadStatus === 'success'
+                  ? 'bg-green-600 hover:bg-green-700 text-white'
+                  : lastJetsonUploadStatus === 'error'
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+                : 'bg-gray-500 text-gray-300 cursor-not-allowed'
+            }`}
+          >
+            {isUploadingToJetson
+              ? '⏳ Uploading to Jetson...'
+              : lastJetsonUploadStatus === 'success'
+              ? '✅ Uploaded to Jetson'
+              : lastJetsonUploadStatus === 'error'
+              ? '❌ Jetson Upload Failed'
+              : '🚀 Upload to Jetson'}
+          </button>
 
         </div>
 

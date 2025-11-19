@@ -40,7 +40,7 @@ const Header: React.FC<HeaderProps> = ({
           </div>
           <h1 className="text-lg font-bold text-orange-400">LAND ROVER</h1>
         </div>
-        <nav className="flex items-center bg-[#1F2937] rounded-lg">
+  <nav className="flex items-center bg-[#1F2937] rounded-lg">
           <button
             onClick={() => setViewMode('dashboard')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${
@@ -58,20 +58,20 @@ const Header: React.FC<HeaderProps> = ({
             Edit Plan
           </button>
           <button
-            onClick={() => setViewMode('servo')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${
-              viewMode === 'servo' ? 'bg-green-500 text-white' : 'text-gray-300 hover:bg-gray-700'
-            }`}
-          >
-            Servo Control
-          </button>
-          <button
             onClick={() => setViewMode('live')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${
               viewMode === 'live' ? 'bg-green-500 text-white' : 'text-gray-300 hover:bg-gray-700'
             }`}
           >
             Live Report
+          </button>
+          <button
+            onClick={() => setViewMode('sprayer')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg ${
+              viewMode === 'sprayer' ? 'bg-green-500 text-white' : 'text-gray-300 hover:bg-gray-700'
+            }`}
+          >
+            Sprayer
           </button>
           <button
             onClick={() => setViewMode('setup')}

@@ -2,9 +2,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Waypoint, RoverData } from '../../types';
 import { useRover } from '../../context/RoverContext';
+import type { SprayStatus } from './SprayStatusIndicator';
 import MapView from '../MapView';
 import WaypointStatusList from './WaypointStatusList';
 import LiveControls from './LiveControls';
+import MissionController, { MissionStatus } from './MissionController';
 import LiveStatusbar from './LiveStatusbar';
 import { getWPMarkStatus, pollWPMarkStatus, WPMarkStatus } from '../../services/wpMarkService';
 
@@ -20,6 +22,7 @@ type LiveReportViewProps = {
   onClearAll?: () => void;
   hasMissionLogs?: boolean;
   hasWpMarkStatus?: boolean;
+  isSprayerMode?: boolean; // New prop to indicate sprayer mode
 };
 
 const LiveReportView: React.FC<LiveReportViewProps> = ({
@@ -34,10 +37,13 @@ const LiveReportView: React.FC<LiveReportViewProps> = ({
   onClearAll,
   hasMissionLogs = false,
   hasWpMarkStatus = false,
+  isSprayerMode = false, // Default to false for backward compatibility
 }) => {
-  const { telemetry } = useRover();
+  const { telemetry, onMissionEvent } = useRover();
   const [wpMarkStatus, setWpMarkStatus] = useState<WPMarkStatus | null>(null);
   const [isPollingWpMark, setIsPollingWpMark] = useState(false);
+  const [missionStatus, setMissionStatus] = useState<MissionStatus | null>(null);
+  const [sprayStatuses, setSprayStatuses] = useState<SprayStatus[]>([]);
 
   // Combined clear function that clears trails and logs
   const handleClearLogsWithTrail = useCallback(async () => {
@@ -128,6 +134,65 @@ const LiveReportView: React.FC<LiveReportViewProps> = ({
     };
   }, [isConnected, isCleared, isPollingWpMark]);
 
+  // Subscribe to mission status events to update per-waypoint spray statuses
+  useEffect(() => {
+    const handler = (ev: any) => {
+      // Support both old wrapped shape ({ type: 'mission_status', data })
+      // and the flat server payload emitted as described in the backend.
+      const payload = ev && ev.type === 'mission_status' && ev.data ? ev.data : ev;
+
+      if (!payload || typeof payload !== 'object') return;
+
+      const et = payload.event_type;
+      const wpId = payload.waypoint_id ?? payload.waypointId ?? payload.current_waypoint ?? null;
+      if (!wpId) return;
+
+      setSprayStatuses((prev) => {
+        const copy = [...prev];
+        const idx = copy.findIndex(s => s.waypointId === wpId);
+        // Initialize if missing
+        if (idx === -1) {
+          copy.push({ waypointId: wpId, status: 'pending' });
+        }
+
+        const targetIndex = copy.findIndex(s => s.waypointId === wpId);
+        const current = copy[targetIndex];
+
+        if (et === 'waypoint_reached') {
+          // Vehicle reached the waypoint; set to navigating (about to mark)
+          current.status = 'navigating';
+          current.sprayStartTime = payload.timestamp || new Date(payload.server_timestamp ? payload.server_timestamp * 1000 : Date.now()).toISOString();
+        } else if (et === 'waypoint_marked') {
+          const mark = payload.marking_status || payload.markingStatus || payload.marking || null;
+          const dur = typeof payload.spray_duration === 'number' ? payload.spray_duration : (payload.sprayDuration ?? null);
+          if (mark === 'completed') {
+            current.status = 'completed';
+            if (dur != null) current.duration = dur;
+            current.sprayEndTime = payload.timestamp || new Date().toISOString();
+          } else if (mark === 'failed') {
+            current.status = 'failed';
+            current.sprayEndTime = payload.timestamp || new Date().toISOString();
+            if (dur != null) current.duration = dur;
+          } else {
+            // Unknown marking status — store message and set failed
+            current.status = 'failed';
+            current.sprayEndTime = payload.timestamp || new Date().toISOString();
+          }
+        } else if (et === 'waypoint_error') {
+          current.status = 'failed';
+          current.sprayEndTime = payload.timestamp || new Date().toISOString();
+        }
+
+        // Ensure consistent ordering by waypoint id
+        copy.sort((a, b) => a.waypointId - b.waypointId);
+        return copy;
+      });
+    };
+
+    onMissionEvent(handler);
+    return () => onMissionEvent(() => {});
+  }, [onMissionEvent]);
+
   return (
     <div className="flex-1 flex flex-col p-3 gap-3 overflow-hidden min-h-0">
       {/* Top section with 3 panels */}
@@ -138,6 +203,8 @@ const LiveReportView: React.FC<LiveReportViewProps> = ({
             waypoints={missionWaypoints}
             activeWaypointId={activeWaypointId}
             completedWaypointIds={isCleared ? [] : liveRoverData.completedWaypointIds}
+            sprayStatuses={sprayStatuses}
+            isSprayerMode={isSprayerMode}
           />
         </aside>
 
@@ -166,13 +233,39 @@ const LiveReportView: React.FC<LiveReportViewProps> = ({
         </main>
 
         {/* Right Panel: Controls */}
-  <aside className="w-[200px] flex-shrink-0" style={{height: '98%'}}>
-          <LiveControls 
-            isConnected={isConnected}
-            currentWaypoint={currentWaypointSeq}
-            wpMarkStatus={wpMarkStatus}
-            onClearLogs={onClearAll || onClearLogsWithTrail || effectiveClearHandler}
-          />
+        <aside className="w-[200px] flex-shrink-0" style={{height: '98%'}}>
+          {isSprayerMode ? (
+            <MissionController
+              isConnected={isConnected}
+              waypoints={missionWaypoints}
+              missionStatus={missionStatus}
+              onMissionLoad={(waypoints, config) => {
+                console.log('[LiveReportView] Mission loaded:', { waypoints: waypoints.length, config });
+              }}
+              onMissionStart={() => {
+                console.log('[LiveReportView] Mission started');
+              }}
+              onMissionStop={() => {
+                console.log('[LiveReportView] Mission stopped');
+              }}
+              onMissionPause={() => {
+                console.log('[LiveReportView] Mission paused');
+              }}
+              onMissionResume={() => {
+                console.log('[LiveReportView] Mission resumed');
+              }}
+              onMissionNext={() => {
+                console.log('[LiveReportView] Next waypoint requested');
+              }}
+            />
+          ) : (
+            <LiveControls 
+              isConnected={isConnected}
+              currentWaypoint={currentWaypointSeq}
+              wpMarkStatus={wpMarkStatus}
+              onClearLogs={onClearAll || onClearLogsWithTrail || effectiveClearHandler}
+            />
+          )}
         </aside>
       </div>
 

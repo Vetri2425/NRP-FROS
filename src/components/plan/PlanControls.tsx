@@ -14,6 +14,7 @@ import MapSelector from './MapSelector';
 import FileSection from './FileSection';
 import Tools from './Tools';
 import PlanActions from './PlanActions';
+import { BACKEND_URL } from '../../config';
 
 type PlanControlsProps = {
   onUpload: (waypoints: Waypoint[], info: MissionFileInfo) => void;
@@ -58,6 +59,8 @@ const PlanControls: React.FC<PlanControlsProps> = ({
   const [isReading, setIsReading] = useState(false);
   const [lastReadStatus, setLastReadStatus] = useState<null | 'success' | 'error' | 'empty'>(null);
   const [readErrorMessage, setReadErrorMessage] = useState<string | null>(null);
+  const [isUploadingToJetson, setIsUploadingToJetson] = useState(false);
+  const [lastJetsonUploadStatus, setLastJetsonUploadStatus] = useState<null | 'success' | 'error'>(null);
   const [currentFile, setCurrentFile] = useState<MissionFileInfo | null>(null);
   const [showCircleTool, setShowCircleTool] = useState(false);
   const [showSurveyGridTool, setShowSurveyGridTool] = useState(false);
@@ -219,6 +222,40 @@ const PlanControls: React.FC<PlanControlsProps> = ({
     }
   };
 
+  const handleUploadToJetson = async () => {
+    if (!missionWaypoints.length) {
+      toast.warning('No waypoints to upload to Jetson.');
+      return;
+    }
+
+    setIsUploadingToJetson(true);
+    setLastJetsonUploadStatus(null);
+
+    try {
+      // Send waypoints to load_controller endpoint
+      const response = await fetch(`${BACKEND_URL}/api/mission/load_controller`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ waypoints: missionWaypoints })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setLastJetsonUploadStatus('success');
+        toast.success(`Waypoints uploaded to Jetson successfully! (${result.message})`);
+      } else {
+        throw new Error('Upload to Jetson failed');
+      }
+    } catch (error) {
+      console.error('Jetson upload error:', error);
+      setLastJetsonUploadStatus('error');
+      toast.error('Failed to upload waypoints to Jetson');
+    } finally {
+      setIsUploadingToJetson(false);
+      setTimeout(() => setLastJetsonUploadStatus(null), 3000);
+    }
+  };
+
   const handleReadFromRover = async () => {
     if (!isConnected) {
       setReadErrorMessage('Rover not connected. Please connect to the rover first.');
@@ -358,6 +395,9 @@ const PlanControls: React.FC<PlanControlsProps> = ({
             isReading={isReading}
             lastReadStatus={lastReadStatus}
             readErrorMessage={readErrorMessage}
+            onUploadToJetson={handleUploadToJetson}
+            isUploadingToJetson={isUploadingToJetson}
+            lastJetsonUploadStatus={lastJetsonUploadStatus}
             homePosition={homePosition}
             onStartSetHome={onStartSetHome}
           />

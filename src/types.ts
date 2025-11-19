@@ -127,4 +127,44 @@ export type Waypoint = {
   showOnMap?: boolean;
 };
 
-export type ViewMode = 'dashboard' | 'planning' | 'live' | 'logs' | 'map' | 'setup' | 'servo';
+export type ViewMode = 'dashboard' | 'planning' | 'live' | 'logs' | 'map' | 'setup' | 'sprayer';
+
+// --- WP_MARK / Sprayer types ---
+export interface WPMarkConfig {
+  delay_before_start: number;
+  pwm_start: number;
+  delay_before_stop: number;
+  pwm_stop: number;
+  delay_after_stop: number;
+  servo_number?: number;
+}
+
+export interface WPMarkStatus {
+  running: boolean;
+  current_waypoint: number;
+  total_waypoints: number;
+  current_phase:
+    | 'idle'
+    | 'initializing'
+    | 'navigating'
+    | 'waiting_arrival'
+    | 'delay_before_start'
+    | 'spraying'
+    | 'delay_after_stop'
+    | 'completed'
+    | 'error'
+    | 'paused';
+  config: WPMarkConfig;
+  uptime_seconds?: number;
+  last_action?: string;
+}
+
+export interface MissionEvent {
+  timestamp: number;
+  message: string;
+  type: string;
+  waypointId?: number;
+  lat?: number;
+  lng?: number;
+  servoAction?: string;
+}

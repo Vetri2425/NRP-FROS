@@ -1,29 +1,20 @@
 // src/config.ts
 
 /**
- * Backend configuration
- * Priority: 
- * 1. Use VITE_ROS_HTTP_BASE from .env if set
- * 2. Otherwise, use fixed IP address 192.168.1.100 with port 5001
+ * Backend configuration for the rover backend server.
+ *
+ * To change the backend IP:
+ * 1. Set the environment variable VITE_ROS_HTTP_BASE in a .env file (e.g., VITE_ROS_HTTP_BASE=http://192.168.1.100:5001)
+ * 2. Or change the default IP below.
+ *
+ * Priority:
+ * 1. VITE_ROS_HTTP_BASE from .env if set
+ * 2. Otherwise, use the default IP below
  */
 const BACKEND_FROM_ENV = import.meta.env.VITE_ROS_HTTP_BASE;
 
 /**
- * Fixed backend IP address for the rover backend server
+ * The full URL for the backend API (Socket.IO and HTTP endpoints).
+ * Change this default IP if needed, or use .env variable.
  */
-export const BACKEND_IP = BACKEND_FROM_ENV 
-  ? new URL(BACKEND_FROM_ENV).hostname 
-  : '192.168.1.101';
-
-/**
- * Defines the port the backend server is running on.
- */
-export const BACKEND_PORT = BACKEND_FROM_ENV 
-  ? new URL(BACKEND_FROM_ENV).port || '5001'
-  : '5001';
-
-/**
- * The full URL for the backend API.
- * Uses .env variable if set, otherwise uses fixed IP 192.168.1.29.
- */
-export const BACKEND_URL = BACKEND_FROM_ENV || `http://192.168.1.101:5001`;
+export const BACKEND_URL = BACKEND_FROM_ENV || 'http://192.168.1.101:5001';
