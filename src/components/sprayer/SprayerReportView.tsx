@@ -197,8 +197,15 @@ const SprayerReportView: React.FC<SprayerReportViewProps> = ({
       });
     };
 
-    onMissionEvent(wrapped);
-    return () => onMissionEvent(() => {});
+    const unregister = onMissionEvent(wrapped);
+    return () => {
+      try {
+        unregister();
+      } catch (err) {
+        // swallow any errors during cleanup to avoid disrupting unmount
+        console.debug('[SprayerReportView] cleanup error:', err);
+      }
+    };
   }, [onMissionEvent]);
 
   // ---------- 🧠 UI Rendering (unchanged) ----------

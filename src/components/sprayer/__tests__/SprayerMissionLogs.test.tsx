@@ -19,9 +19,9 @@ import type { Waypoint } from '../../../types';
 
 describe('SprayerMissionLogs realtime updates', () => {
   const waypoints: Waypoint[] = [
-    { id: 1, lat: 13.07, lng: 80.26 },
-    { id: 2, lat: 13.071, lng: 80.261 },
-    { id: 3, lat: 13.072, lng: 80.262 },
+    { id: 1, lat: 13.07, lng: 80.26, alt: 10 },
+    { id: 2, lat: 13.071, lng: 80.261, alt: 11 },
+    { id: 3, lat: 13.072, lng: 80.262, alt: 12 },
   ] as any;
 
   const mockWaypointReached = {
@@ -57,8 +57,8 @@ describe('SprayerMissionLogs realtime updates', () => {
     expect(wp2row).toBeTruthy();
 
     const cells = wp2row.querySelectorAll('td');
-    const reachCell = cells[4];
-    const markCell = cells[5];
+    const reachCell = cells[6];
+    const markCell = cells[7];
 
     expect(reachCell.textContent).toBe('-');
     expect(markCell.textContent).toBe('-');
@@ -75,9 +75,10 @@ describe('SprayerMissionLogs realtime updates', () => {
     // Now simulate waypoint_marked
     registeredHandler && registeredHandler(mockWaypointMarked);
 
-    // WP_MARK should show 'completed'
+    // WP_MARK should show '✓✓'
     await waitFor(() => {
-      expect(markCell.textContent).toBe('completed');
+      expect(reachCell.textContent).toBe('✓✓');
+      expect(markCell.textContent).not.toBe('-');
     });
   });
 });
