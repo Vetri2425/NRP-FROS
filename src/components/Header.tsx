@@ -79,7 +79,7 @@ const Header: React.FC<HeaderProps> = ({
               viewMode === 'setup' ? 'bg-green-500 text-white' : 'text-gray-300 hover:bg-gray-700'
             }`}
           >
-            Setup
+            Settings
           </button>
         </nav>
       </div>

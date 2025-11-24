@@ -9,6 +9,7 @@ vi.mock('../../../context/RoverContext', () => ({
   useRover: () => ({
     onMissionEvent: (cb: (ev: any) => void) => {
       registeredHandler = cb;
+      return () => { registeredHandler = null; };
     },
   }),
 }));

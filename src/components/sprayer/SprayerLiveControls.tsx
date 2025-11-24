@@ -26,7 +26,7 @@ const SprayerControls: React.FC<SprayerLiveControlsProps> = ({
   onLoadMission,
   waypoints = [], // Default to empty array
 }) => {
-  const { services } = useRover();
+  const { services, telemetry } = useRover();
   const [mode, setMode] = React.useState<'auto' | 'manual'>('auto');
   const [isTogglingMode, setIsTogglingMode] = React.useState(false);
   const [isRunning, setIsRunning] = React.useState(false);
@@ -34,6 +34,7 @@ const SprayerControls: React.FC<SprayerLiveControlsProps> = ({
   const [isLoadingMission, setIsLoadingMission] = React.useState(false);
   const [isStartingMission, setIsStartingMission] = React.useState(false);
   const [isStoppingMission, setIsStoppingMission] = React.useState(false);
+  const [isSkippingWaypoint, setIsSkippingWaypoint] = React.useState(false);
   // Waypoint preview dialog state
   const [showWaypointDialog, setShowWaypointDialog] = React.useState(false);
 
@@ -120,6 +121,37 @@ const SprayerControls: React.FC<SprayerLiveControlsProps> = ({
       console.error('Stop mission failed:', error);
     } finally {
       setIsStoppingMission(false);
+    }
+  };
+
+  const handleSkipWaypoint = async () => {
+    if (!isConnected) {
+      toast.error('Not connected to rover!');
+      return;
+    }
+
+    setIsSkippingWaypoint(true);
+    try {
+      const response = await fetch(`${BACKEND_URL.replace(/\/$/, '')}/api/mission/skip`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast.success(data.message || 'Skipped to next waypoint');
+      } else {
+        toast.error(data.message || 'Failed to skip waypoint');
+      }
+    } catch (error) {
+      console.error('Skip waypoint failed:', error);
+      toast.error('Failed to skip waypoint');
+    } finally {
+      setIsSkippingWaypoint(false);
     }
   };
 
@@ -250,15 +282,12 @@ const SprayerControls: React.FC<SprayerLiveControlsProps> = ({
         }}
       >Next Waypoint</button>
       <button
-        className="w-full py-3 bg-orange-500 text-white rounded hover:bg-orange-600"
-        onClick={() => {
-          if (!isConnected) {
-            toast.error('Not connected to rover!');
-            return;
-          }
-          toast.info('Skip Waypoint clicked');
-        }}
-      >Skip Waypoint</button>
+        className="w-full py-3 bg-orange-500 text-white rounded hover:bg-orange-600 disabled:opacity-50"
+        onClick={handleSkipWaypoint}
+        disabled={isSkippingWaypoint}
+      >
+        {isSkippingWaypoint ? '⏳ Skipping...' : 'Skip Waypoint'}
+      </button>
 
       {/* Confirmation Dialog */}
       {confirmAction && (

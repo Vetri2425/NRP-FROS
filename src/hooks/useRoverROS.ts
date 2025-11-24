@@ -490,7 +490,7 @@ export interface UseRoverROSResult {
   connectionState: ConnectionState;
   reconnect: () => void;
   services: RoverServices;
-  onMissionEvent: (callback: (event: MissionEventData) => void) => void;
+  onMissionEvent: (callback: (event: MissionEventData) => void) => () => void;
 }
 
 export interface MissionEventData {
@@ -512,7 +512,7 @@ export function useRoverROS(): UseRoverROSResult {
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffRef = useRef<number>(INITIAL_BACKOFF_MS);
   const connectDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const missionEventCallbackRef = useRef<((event: MissionEventData) => void) | null>(null);
+  const missionEventCallbackRef = useRef<((event: MissionEventData) => void)[]>([]);
   const mutableRef = useRef<MutableTelemetry>({
     telemetry: createDefaultTelemetry(),
     lastEnvelopeTs: null,
@@ -791,18 +791,14 @@ export function useRoverROS(): UseRoverROSResult {
         // Listen for mission events from backend
         socket.on('mission_event', (data: MissionEventData) => {
           console.log('Received mission_event:', data);
-          if (missionEventCallbackRef.current) {
-            missionEventCallbackRef.current(data);
-          }
+          missionEventCallbackRef.current.forEach(cb => cb(data));
         });
 
         // Provide a snapshot of mission logs (history)
         socket.on('mission_logs_snapshot', (data: any) => {
           console.log('Received mission_logs_snapshot:', data);
-          if (missionEventCallbackRef.current) {
-            // Forward snapshot to the mission event callback so UI can populate logs
-            missionEventCallbackRef.current(data as MissionEventData);
-          }
+          // Forward snapshot to the mission event callback so UI can populate logs
+          missionEventCallbackRef.current.forEach(cb => cb(data as MissionEventData));
         });
 
         // Server-wide activity events (filter for mission/servo related activity)
@@ -812,9 +808,7 @@ export function useRoverROS(): UseRoverROSResult {
             const ev = activity as any;
             if (ev.event === 'mission' || ev.event === 'servo') {
               console.log('Received server_activity (mission/servo):', ev);
-              if (missionEventCallbackRef.current) {
-                missionEventCallbackRef.current(ev as MissionEventData);
-              }
+              missionEventCallbackRef.current.forEach(cb => cb(ev as MissionEventData));
             }
           } catch (err) {
             console.error('Error handling server_activity:', err);
@@ -824,6 +818,21 @@ export function useRoverROS(): UseRoverROSResult {
         // Mission controller status updates (real-time from mission controller node)
         socket.on('mission_status', (data: any) => {
           console.log('[Mission Status Update]', data);
+
+          // Update telemetry with mission controller status
+          setTelemetrySnapshot(prev => ({
+            ...prev,
+            mission: {
+              total_wp: data.total_waypoints || prev.mission.total_wp,
+              current_wp: data.current_waypoint || prev.mission.current_wp,
+              status: data.mission_state || data.mission_mode || prev.mission.status,
+              progress_pct: data.total_waypoints > 0
+                ? Math.round((data.current_waypoint / data.total_waypoints) * 100)
+                : prev.mission.progress_pct,
+            },
+            lastMessageTs: Date.now(),
+          }));
+
           // Forward the server-provided status object directly to the mission
           // event callback. The backend emits a flat object (base payload +
           // any extra_data merged in), and UI handlers expect fields like
@@ -831,37 +840,31 @@ export function useRoverROS(): UseRoverROSResult {
           // wrapper nested the payload under `data` which prevented callers
           // from accessing those top-level keys. Forwarding the payload
           // directly keeps the shape consistent with the server.
-          if (missionEventCallbackRef.current) {
-            try {
-              missionEventCallbackRef.current(data as any);
-            } catch (err) {
-              console.error('Error in mission_status handler callback:', err);
-            }
+          try {
+            missionEventCallbackRef.current.forEach(cb => cb(data as any));
+          } catch (err) {
+            console.error('Error in mission_status handler callback:', err);
           }
         });
 
         // Mission controller errors
         socket.on('mission_error', (data: { error: string }) => {
           console.error('[Mission Error]', data.error);
-          if (missionEventCallbackRef.current) {
-            missionEventCallbackRef.current({
-              type: 'mission_error',
-              message: data.error,
-              timestamp: Date.now(),
-            } as any);
-          }
+          missionEventCallbackRef.current.forEach(cb => cb({
+            type: 'mission_error',
+            message: data.error,
+            timestamp: Date.now(),
+          } as any));
         });
 
         // Mission command acknowledgments
         socket.on('mission_command_ack', (data: { status: string; command: string }) => {
           console.log('[Mission Command ACK]', data);
-          if (missionEventCallbackRef.current) {
-            missionEventCallbackRef.current({
-              type: 'mission_command_ack',
-              message: `Command ${data.command} ${data.status}`,
-              timestamp: Date.now(),
-            } as any);
-          }
+          missionEventCallbackRef.current.forEach(cb => cb({
+            type: 'mission_command_ack',
+            message: `Command ${data.command} ${data.status}`,
+            timestamp: Date.now(),
+          } as any));
         });
 
         // Mission controller node status
@@ -1014,7 +1017,13 @@ const services = useMemo<RoverServices>(
 );
 
   const onMissionEvent = useCallback((callback: (event: MissionEventData) => void) => {
-    missionEventCallbackRef.current = callback;
+    missionEventCallbackRef.current.push(callback);
+    return () => {
+      const index = missionEventCallbackRef.current.indexOf(callback);
+      if (index > -1) {
+        missionEventCallbackRef.current.splice(index, 1);
+      }
+    };
   }, []);
 
   // Memoize rover position to prevent unnecessary re-renders
